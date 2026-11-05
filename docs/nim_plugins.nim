@@ -72,8 +72,8 @@ nb.doc.context["stylesheet"] = %(nb.doc.context["stylesheet"].getStr & """
 .nq-panel > pre:first-child { margin-top: 0; }
 .nq-panel > pre:first-child > code { border-top-left-radius: 0; }
 pre:has(> code.language-python)::before { content: "python"; }
-table.bench { border-collapse: collapse; font: .85rem/1.4 var(--mono); margin: 1rem 0; width: 100%; }
-table.bench th, table.bench td { padding: .3rem .5rem; border-bottom: 1px solid var(--rule); text-align: right; }
+table.bench { border-collapse: collapse; font: .85rem/1.4 var(--mono); margin: 1rem 0; width: 100%; display: table; }
+table.bench th, table.bench td { padding: .3rem .5rem; border-bottom: 1px solid var(--rule); text-align: right; min-width: 0; }
 table.bench th:first-child, table.bench td:first-child { text-align: left; }
 .tablewrap { overflow-x: auto; }
 </style>
@@ -240,8 +240,8 @@ formatting `2026-W45`, adding weeks across year ends (some years have 53
 weeks), the Monday a week starts on. Each one is a few lines, for example:
 """
 nbRawHtml: "<pre><code class=\"nohighlight nim hljs\">" &
-  highlightNim(lines("src/nanuqmore/isoweek_plugin.nim", 63, 65) & "\n\n" &
-               lines("src/nanuqmore/isoweek_plugin.nim", 95, 97)) & "</code></pre>"
+  highlightNim(lines("src/nanuqmore/isoweek_plugin.nim", 75, 77) & "\n\n" &
+               lines("src/nanuqmore/isoweek_plugin.nim", 113, 115)) & "</code></pre>"
 
 nbText: """
 Here they are at work, around the turn of 2020, a year with a week 53.
@@ -281,6 +281,48 @@ dates, no differences).
 One limit of the unstable extension types today: Polars knows nothing about
 the type beyond its storage, so `max` on an `IsoWeek` column refuses to run.
 That is where a type plugin would need to grow.
+"""
+
+nbText: """
+### Against iso-week-date
+
+Francesco's [iso-week-date](https://github.com/FBruzzesi/iso-week-date) package
+(pure Python) has Polars helpers too. They are vectorized already: they build
+Polars string expressions (`strftime("%G-W%V")`, `strptime`, slices and a
+regex), so the work runs in Polars' Rust kernels. Its week arithmetic (`+ 3`
+weeks, the distance between weeks) lives in a scalar `IsoWeek` class, so on a
+column it goes through `map_elements`, a Python call per row. Same 10 million
+dates, best of five (`benchmarks/bench_isoweek.py`); both sides give the same
+strings and dates (iwd is iso-week-date):
+"""
+block:
+  let bench = parseJson(readFile(repo / "benchmarks" / "results" / "isoweek_10M.json"))
+  var rows = ""
+  for r in bench["results"]:
+    let nim = r["nim"].getFloat
+    let iwd = if r["iwd"].kind == JNull: "–" else: $int(round(r["iwd"].getFloat * 1000))
+    let ratio = if r["iwd"].kind == JNull: "" else: formatFloat(r["iwd"].getFloat / nim, ffDecimal, 1) & "x"
+    let label = r["case"].getStr.replace("(Nim: the isoweek type, no string)", "type").replace(", map_elements, 100000 rows", " (100k rows)")
+    rows.add &"<tr><td>{label}</td><td>{int(round(nim * 1000))}</td><td>{iwd}</td><td>{ratio}</td></tr>"
+  nbRawHtml: "<div class=\"tablewrap\"><table class=\"bench\"><thead><tr><th>ms</th><th>Nim</th>" &
+    "<th>iwd</th><th>gain</th></tr></thead><tbody>" & rows & "</tbody></table></div>"
+
+nbText: """
+So the margin is not in conversions to and from text, where Polars' own
+kernels are already good (the Nim plugin is level on formatting, twice as fast
+on parsing, and slower on validation, which iso-week-date does with one regex
+pass). It is in **having a week type**. Once a column *is* weeks, adding weeks
+or counting them is integer arithmetic in one pass, 4 to 7 times faster than
+round-tripping through dates and strings, and two orders of magnitude faster
+than the scalar class per row. Grouping, sorting and joining on weeks also skip
+the strings.
+
+Getting here took two fixes to the first version, both about allocation:
+parsing copied each value into a Nim string (now it reads the Arrow bytes in
+place), and formatting built a string per row and returned the old
+offsets-based layout. Now it writes Arrow *string views*: a string of up to 12
+bytes, like `2026-W45`, lives inside its 16-byte view, with no data buffer at
+all. Formatting got 2.5x faster, parsing 2.7x.
 """
 
 nbText: """

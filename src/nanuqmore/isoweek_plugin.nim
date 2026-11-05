@@ -17,7 +17,19 @@ proc `==`*(a, b: IsoWeek): bool {.borrow.}
 proc `<`*(a, b: IsoWeek): bool {.borrow.}
 proc year*(w: IsoWeek): int = w.int div 100
 proc week*(w: IsoWeek): int = w.int mod 100
-proc `$`*(w: IsoWeek): string = $w.year & "-W" & align($w.week, 2, '0')
+proc toShortStr*(w: IsoWeek): ShortStr =
+  ## `2026-W45`, written into a fixed buffer (no allocation).
+  var y = w.year
+  if y < 0: result.add '-'; y = -y
+  var digits: array[6, char]
+  var n = 0
+  while true:
+    digits[n] = char(ord('0') + y mod 10); inc n; y = y div 10
+    if y == 0 and n >= 4: break
+  for k in countdown(n - 1, 0): result.add digits[k]
+  result.add '-'; result.add 'W'
+  result.add char(ord('0') + w.week div 10); result.add char(ord('0') + w.week mod 10)
+proc `$`*(w: IsoWeek): string = $toShortStr(w)
 
 # ------------------------------------------------- calendar arithmetic, on days since 1970-01-01
 
@@ -65,15 +77,21 @@ proc isoweek*(d: Date32): IsoWeek {.polarsExpr.} =
   isoweekOfDays(d.int)
 
 proc isoweekParse*(s: StrView): Option[IsoWeek] {.polarsExpr.} =
-  ## `2026-W45`, `2026W45` or `2026-W45-3` (the weekday is ignored); null if invalid.
-  let s = $s
-  var y, w: int
-  let dash = s.len >= 8 and s[4] == '-'
+  ## `2026-W45`, `2026W45` or `2026-W45-3` (the weekday, 1 to 7, is checked and
+  ## dropped); null if the text is not one of these or the week does not exist.
+  ## Reads the bytes in place: no allocation per row.
+  template digit(i: int): int =
+    (if s[i] in {'0' .. '9'}: ord(s[i]) - ord('0') else: return none(IsoWeek))
+  if s.len < 7: return none(IsoWeek)
+  let y = digit(0) * 1000 + digit(1) * 100 + digit(2) * 10 + digit(3)
+  let dash = s[4] == '-'
   let wi = if dash: 5 else: 4
   if s.len < wi + 3 or s[wi] notin {'W', 'w'}: return none(IsoWeek)
-  try:
-    y = parseInt(s[0 ..< 4]); w = parseInt(s[wi + 1 .. wi + 2])
-  except ValueError: return none(IsoWeek)
+  let w = digit(wi + 1) * 10 + digit(wi + 2)
+  let rest = s.len - (wi + 3)
+  if rest != 0:
+    if not (dash and rest == 2 and s[wi + 3] == '-' and s[wi + 4] in {'1' .. '7'}):
+      return none(IsoWeek)
   if w < 1 or w > weeksInYear(y): return none(IsoWeek)
   some IsoWeek(int32(y * 100 + w))
 
@@ -82,7 +100,7 @@ proc isoweekFromInt*(x: int32): Option[IsoWeek] {.polarsExpr.} =
   let w = IsoWeek(x)
   if w.week < 1 or w.week > weeksInYear(w.year): none(IsoWeek) else: some w
 
-proc isoweekFormat*(w: IsoWeek): string {.polarsExpr.} = $w
+proc isoweekFormat*(w: IsoWeek): ShortStr {.polarsExpr.} = toShortStr(w)
 
 proc isoweekStart*(w: IsoWeek): Date32 {.polarsExpr.} =
   ## The Monday the week starts on.

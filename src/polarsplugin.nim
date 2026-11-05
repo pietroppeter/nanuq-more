@@ -23,6 +23,9 @@ type
   StrView* = object            ## a string value, borrowed from the input
     p*: ptr UncheckedArray[char]
     n*: int
+  ShortStr* = object           ## a string of up to 12 bytes, returned without allocating
+    len*: int
+    data*: array[12, char]
   RowRng* = object             ## counter-based random numbers, one stream per row
     seed*, row*, counter*: uint64
   PluginError* = object of CatchableError
@@ -33,6 +36,11 @@ proc `$`*(s: StrView): string =
   result = newString(s.n)
   if s.n > 0: copyMem(result[0].addr, s.p, s.n)
 proc len*(s: StrView): int = s.n
+proc add*(s: var ShortStr, c: char) {.inline.} =
+  s.data[s.len] = c; inc s.len
+proc `$`*(s: ShortStr): string =
+  result = newString(s.len)
+  for i in 0 ..< s.len: result[i] = s.data[i]
 proc `[]`*(s: StrView, i: int): char = s.p[i]
 
 # ---------------------------------------------------------------- random numbers
@@ -92,7 +100,7 @@ proc arrowFormat*(T: typedesc): string =
   elif T is uint16: "S"
   elif T is uint8: "C"
   elif T is bool: "b"
-  elif T is string or T is StrView: "u"
+  elif T is string or T is StrView or T is ShortStr: "vu"
   else: {.error: "no Polars dtype for " & $T.}
 
 proc arrowExtension*(T: typedesc): string =
@@ -225,13 +233,12 @@ type
     data: pointer                     # malloc'ed, handed to Polars
     valid: ptr UncheckedArray[uint8]  # malloc'ed lazily on the first null
     nulls: int
-    offsets: ptr UncheckedArray[int32]  # strings
-    chars: seq[char]
+    chars: seq[char]                  # strings longer than 12 bytes
 
 proc initOut*[T](n: int): Out[T] =
   result.len = n
-  when T is string:
-    result.offsets = cast[ptr UncheckedArray[int32]](allocC0(4 * (n + 1)))
+  when T is string or T is ShortStr:
+    result.data = allocC0(16 * n)     # Arrow string views; a null or empty view is all zeros
   elif T is bool:
     result.data = allocC0((n + 7) div 8)
   else:
@@ -243,12 +250,27 @@ proc setNull*[T](o: var Out[T], i: int) =
     for k in 0 ..< (o.len + 7) div 8: o.valid[k] = 0xff
   o.valid[i shr 3] = o.valid[i shr 3] and not uint8(1 shl (i and 7))
   inc o.nulls
-  when T is string: o.offsets[i + 1] = o.chars.len.int32
+
+proc setView[T](o: var Out[T], i: int, p: ptr UncheckedArray[char], n: int) {.inline.} =
+  # A view is (int32 len, 12 bytes inline) or (int32 len, 4-byte prefix,
+  # int32 buffer index, int32 offset) for longer strings.
+  let v = cast[ptr UncheckedArray[char]](cast[uint](o.data) + uint(16 * i))
+  cast[ptr int32](v)[] = n.int32
+  if n <= 12:
+    if n > 0: copyMem(v[4].addr, p, n)
+  else:
+    copyMem(v[4].addr, p, 4)
+    cast[ptr int32](v[8].addr)[] = 0
+    cast[ptr int32](v[12].addr)[] = o.chars.len.int32
+    let at = o.chars.len
+    o.chars.setLen(at + n)
+    copyMem(o.chars[at].addr, p, n)
 
 proc set*[T](o: var Out[T], i: int, v: T) {.inline.} =
   when T is string:
-    o.chars.add v
-    o.offsets[i + 1] = o.chars.len.int32
+    if v.len > 0: o.setView(i, cast[ptr UncheckedArray[char]](v[0].unsafeAddr), v.len)
+  elif T is ShortStr:
+    o.setView(i, cast[ptr UncheckedArray[char]](v.data[0].unsafeAddr), v.len)
   elif T is bool:
     if v:
       let p = cast[ptr UncheckedArray[uint8]](o.data)
@@ -262,10 +284,13 @@ proc finish*[T](o: var Out[T], name: string): SeriesExport =
   let schema = newSchema(arrowFormat(T), name,
                          if ext.len > 0: @[("ARROW:extension:name", ext)] else: @[])
   let arr =
-    when T is string:
+    when T is string or T is ShortStr:
+      # validity, views, one data buffer, then the data buffers' sizes (int64)
       let chars = allocC(o.chars.len)
       if o.chars.len > 0: copyMem(chars, o.chars[0].addr, o.chars.len)
-      newArray(o.len, o.nulls, [pointer(o.valid), pointer(o.offsets), chars])
+      let sizes = cast[ptr int64](allocC(8))
+      sizes[] = o.chars.len.int64
+      newArray(o.len, o.nulls, [pointer(o.valid), o.data, chars, pointer(sizes)])
     else:
       newArray(o.len, o.nulls, [pointer(o.valid), o.data])
   exportSeries(schema, arr)

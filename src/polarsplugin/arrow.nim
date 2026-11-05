@@ -109,7 +109,7 @@ proc newSchema*(format, name: string, metadata: openArray[(string, string)] = []
 # ---------------------------------------------------------------- arrays we export
 
 type ArrayPrivate = object
-  buffers: array[3, pointer]
+  buffers: array[4, pointer]
 
 proc releaseArray(a: ptr ArrowArray) {.cdecl, gcsafe, raises: [].} =
   if a.isNil or a.release.isNil: return
