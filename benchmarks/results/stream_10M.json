@@ -1,0 +1,1 @@
+{"rows": 10000000, "case": "Normal cdf, column params", "in-memory": {"nim": 0.299, "rust": 0.323}, "streaming": {"nim": 0.074, "rust": 0.082}}

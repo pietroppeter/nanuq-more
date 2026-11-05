@@ -1,0 +1,5 @@
+dist/
+.venv/
+*.so
+*.html
+__pycache__/
