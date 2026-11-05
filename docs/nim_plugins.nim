@@ -18,12 +18,13 @@ nb.doc.filename = "nim_plugins.html"
 nb.useNanuqTheme(
   titleHtml = "Polars plugins, <em>without</em> the Rust",
   eyebrow = "nanuq-more · 5 November 2026 · exploration",
-  epigraph = "A friend wrote two Polars extensions in Rust. Could Nim write them too, " &
-             "and serve both Nanuq and Python Polars?",
+  epigraph = "Francesco, a friend, likes to extend Polars (in Rust and Python). " &
+             "Let's try to convince him to give Nim a try.",
   meta = "exploration report · Nanuq 0.6 (+ plugins), Polars 2.1.0, Nim " & NimVersion &
          " · rendered with nimib",
-  summary = "How Polars expression plugins work, and two of them (ISO weeks and " &
-            "probability distributions) written in Nim, loaded by Nanuq and by Python Polars.",
+  summary = "How Polars expression plugins work, and Francesco's two extensions (ISO weeks " &
+            "and all of polars-stats) written in Nim, loaded by Nanuq and by Python Polars, " &
+            "and running in this page.",
   tableOfContents = true)
 
 # ---------------------------------------------------------------------------
@@ -76,6 +77,19 @@ table.bench { border-collapse: collapse; font: .85rem/1.4 var(--mono); margin: 1
 table.bench th, table.bench td { padding: .3rem .5rem; border-bottom: 1px solid var(--rule); text-align: right; min-width: 0; }
 table.bench th:first-child, table.bench td:first-child { text-align: left; }
 .tablewrap { overflow-x: auto; }
+.dw { border: 1px solid var(--rule); border-radius: 8px; padding: .8rem 1rem; margin: 1.4rem 0; }
+.dw-param { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .8rem; font: .9rem/1.4 var(--mono); margin: .35rem 0; }
+.dw-param span { min-width: 7.5rem; color: var(--mute); }
+.dw-param b { color: var(--ink); font-weight: 600; }
+.dw-param input[type=range] { flex: 1; min-width: 9rem; accent-color: var(--fjord); }
+.dw-param select, .dw-param input[type=date] { font: inherit; padding: .2rem .4rem; }
+#dw-plot { width: 100%; height: auto; display: block; margin-top: .6rem; }
+.dw-dens { fill: var(--floe); stroke: var(--fjord); stroke-width: 2; }
+.dw-mass { fill: var(--fjord); opacity: .75; }
+.dw-cdf { fill: none; stroke: var(--ink); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.dw-axis { stroke: var(--rule); }
+.dw-tick { font: 14px var(--mono); fill: var(--mute); }
+.dw-stats { font: .85rem/1.5 var(--mono); color: var(--mute); margin-top: .4rem; }
 </style>
 """)
 
@@ -114,24 +128,34 @@ let repo = currentSourcePath.parentDir.parentDir
 proc lines(path: string, first, last: int): string =
   readFile(repo / path).splitLines[first - 1 .. last - 1].join("\n")
 
+proc excerpt(path, start: string): string =
+  ## The lines of `path` from the first one starting with `start` to the next blank line.
+  var keep = false
+  var got: seq[string]
+  for line in readFile(repo / path).splitLines:
+    if line.startsWith(start): keep = true
+    if keep:
+      if line.strip.len == 0: break
+      got.add line
+  got.join("\n")
+
 # ---------------------------------------------------------------------------
 
 nbText: """
-Francesco Bruzzesi, a friend of this project, extends Polars in Rust. One of his
-extensions adds an **ISO week** data type (`2026-W45`, the week numbering that
-calendars, retail and payroll live by). Another, [polars-stats](https://github.com/FBruzzesi/polars-stats),
-adds **vectorized probability distributions**: `Normal(mu="mu", sigma="sigma").sf("x")`
+Francesco Bruzzesi, a friend, likes to extend Polars, in Rust and in Python.
+[polars-stats](https://github.com/FBruzzesi/polars-stats), in Rust, adds
+**vectorized probability distributions**: `Normal(mu="mu", sigma="sigma").sf("x")`
 scores every row against its own distribution, inside a lazy query, without
-leaving Polars. He is presenting it at Compute Paris.
+leaving Polars (he is presenting it at Compute Paris).
+[iso-week-date](https://github.com/FBruzzesi/iso-week-date), in Python, handles
+**ISO weeks** (`2026-W45`, the week numbering that calendars, retail and payroll
+live by).
 
-Nanuq is Polars for Nim, so the question writes itself: can we write such
-extensions in Nim? And since Nim compiles to C, could the very same library also
-plug into **Python** Polars, as an alternative to Rust for people who'd rather
-not learn Rust?
-
-The short answer is yes, both. This post explains how Polars plugins work, then
-builds both extensions in Nim, runs them from Nanuq and from Python, and
-compares them with the Rust approach. The code lives in *nanuq-more*.
+Let's try to convince him to give Nim a try. Gently: Rust and Python serve him
+well, and the last sections are honest about why he might stay. The plan is to
+write both extensions in Nim, as Polars plugins that work from Nanuq (Polars for
+Nim) *and* from Python Polars, compare them with his, and see what Nim brings
+and what it costs. The code lives in [nanuq-more](https://github.com/pietroppeter/nanuq-more).
 """
 
 nbText: """
@@ -191,7 +215,7 @@ plugin. Nim can.
 nbText: """
 ## A plugin in Nim
 
-`polarsplugin` is about 600 lines of Nim: the Arrow structs, the version and
+`polarsplugin` is about 900 lines of Nim: the Arrow structs, the version and
 error functions, a reader for the input columns (zero-copy when the type
 already matches), a writer for the output, a pickle reader for keyword
 arguments, and one macro. The macro is the part you see. You write a scalar
@@ -281,7 +305,30 @@ dates, no differences).
 One limit of the unstable extension types today: Polars knows nothing about
 the type beyond its storage, so `max` on an `IsoWeek` column refuses to run.
 That is where a type plugin would need to grow.
+
+Nim compiles to JavaScript too, and `polarsplugin` makes `{.polarsExpr.}` a
+no-op there, so the plugin module runs in this page. Pick a date: the week below
+comes from the same `isoweek` and `isoweekStart` procs that Polars calls.
 """
+nbRawHtml: """<div class="dw"><label class="dw-param"><span>date</span>
+<input type="date" id="iw-date" value="2026-11-05"></label><div id="iw-out" class="dw-stats"></div></div>"""
+nbJsFromCode:
+  import std/[dom, strutils]
+  import ../src/polarsplugin, ../src/nanuqmore/isoweek_plugin
+  proc utcDay(ms: float): cstring {.importjs: "new Date(#).toUTCString().slice(0, 16)".}
+  proc showWeek() =
+    let parts = ($InputElement(document.getElementById("iw-date")).value).split('-')
+    if parts.len != 3:
+      document.getElementById("iw-out").innerHTML = "pick a date"
+      return
+    let days = daysFromCivil(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]))
+    let w = isoweek(Date32(int32(days)))
+    let monday = utcDay(float(int(isoweekStart(w))) * 86400000.0)
+    document.getElementById("iw-out").innerHTML = cstring("<b>" & $w & "</b> · week " & $w.week &
+      " of " & $weeksInYear(w.year) & " in " & $w.year & " · starts on " & $monday)
+  document.getElementById("iw-date").addEventListener("input", proc (e: Event) = showWeek())
+  showWeek()
+
 
 nbText: """
 ### Against iso-week-date
@@ -328,15 +375,39 @@ all. Formatting got 2.5x faster, parsing 2.7x.
 nbText: """
 ## Probability distributions
 
-The second extension follows polars-stats: every distribution function takes the
-evaluation point and the parameters as columns, so each row can carry its own
-distribution. Seven distributions (normal, log-normal, exponential, uniform,
-gamma, beta, Poisson) with their pdf, cdf, survival function, quantiles and
-sampling come to about 300 lines, special functions included. The normal
-survival function:
+The second extension is all of polars-stats: the same 14 distributions (normal,
+log-normal, exponential, uniform, gamma, beta, Cauchy, Pareto, Weibull;
+Bernoulli, binomial, Poisson, geometric, discrete uniform), the same parameters,
+and the same 15 methods for each: the pdf (or pmf) and its log, `cdf`, `sf` and
+their logs, `ppf`, `isf`, `mean`, `variance`, `std`, `median`, `entropy`,
+`sample` and `samples`. That is 210 plugin functions. Each distribution is one
+block that says only what is particular to it. The gamma distribution:
 """
 nbRawHtml: "<pre><code class=\"nohighlight nim hljs\">" &
-  highlightNim(lines("src/nanuqmore/stats_plugin.nim", 178, 180)) & "</code></pre>"
+  highlightNim(excerpt("src/nanuqmore/stats_plugin.nim", "continuous gamma")) & "</code></pre>"
+
+nbText: """
+The `continuous` and `discrete` macros (about 180 lines) write the rest. A
+method the block does not give is derived: `pdf` from `logPdf`, `sf` as
+`1 - cdf`, the logs (through `ln1p` of the complement near 1, where
+`ln(1 - tiny)` would round to 0), `median` as `ppf(0.5)`, `ppf` and `isf` by
+solving `cdf(x) = q` (a safeguarded secant on a bracket grown from the mean, or
+a search over the integers for a discrete distribution), `sample` by inversion,
+and `samples(size)` as `size` consecutive draws of the row's random stream, so
+that `samples(1)` equals `sample`, as in polars-stats. Every method also gets
+the parameter checks (`Positive`, `Probability`, `Count`, plus the block's own
+`check` if it has one), NaN in and NaN out, a null for a quantile outside [0, 1],
+and then `{.polarsExpr.}`. The gamma block gives no `ppf`, so its quantiles are
+solved; a closed form, where there is one, is faster and more exact, so the
+other blocks give theirs.
+
+polars-stats spends about 6,300 lines of Rust on the same API, on top of the
+statrs crate. The Nim version is about 780 lines, special functions included.
+That is not all metaprogramming: polars-stats is more careful in places
+(dedicated tail formulas, constant parameters checked once, many more tests),
+and it has documentation. But the shape of the code is the point: one
+distribution, one short block.
+"""
 
 nbText: """
 The polars-stats README opens with anomaly scoring, where each reading has its
@@ -369,20 +440,45 @@ Same numbers, same draws. Sampling is **keyed** like polars-stats: each draw is
 a pure function of the seed and a row key (the row index by default), so a
 seeded column repeats across runs, chunkings and threads.
 
-How good are the numbers? On 200,000 random parameter sets, the largest
-relative difference from scipy.stats is 4e-13 for the normal cdf, 3e-11 for
-the normal quantile function (deep in the tails), and below 1e-13 everywhere
-else. Seeded samples pass Kolmogorov-Smirnov tests against scipy's
-distributions. The checks are in `tests/check_stats.py`.
+How good are the numbers? Every method of every distribution is checked
+against scipy.stats on 20,000 random parameter sets: the largest relative
+difference is below 1e-10 (most methods below 1e-13), discrete quantiles agree
+exactly, and only the binomial log-tails below 1e-280 lose digits (2e-5).
+Seeded samples have the right moments and pass Kolmogorov-Smirnov tests. The
+checks are in `tests/check_stats.py`, the table in
+`benchmarks/results/accuracy_all.txt`.
 """
 
 nbText: """
-## One file, three uses
+## The same code, in the browser
+
+Here is the distribution module again, this time compiled by `nim js` while the
+page rendered. It is not a JavaScript port: the curve (the pdf or pmf), the line
+(the cdf) and the numbers under them come from `gammaPdf`, `gammaPpf`,
+`gammaEntropy` and the rest, the procs Polars calls. Only `erfc` and `lgamma`
+differ, because JavaScript has no C maths library: a short Lanczos `lgamma`
+(1e-15) and a 1e-7 `erfc`, plenty for a plot.
+"""
+nbRawHtml: """<div class="dw">
+<label class="dw-param"><span>distribution</span><select id="dw-dist"></select></label>
+<div id="dw-params"></div>
+<svg id="dw-plot" viewBox="0 0 480 280" role="img" aria-label="density and cdf"></svg>
+<div id="dw-stats" class="dw-stats"></div></div>"""
+nbJsFromCode:
+  include distwidget
+
+nbText: """
+Writing explainers like this one is part of what Nim is good at: the page, its
+tables and its widgets are Nim, and they run the real code.
+"""
+
+nbText: """
+## One file, four uses
 
 Look at the Nim tab above again: `normalSf(col"value", col"mu", col"sigma")`
 is Nanuq code, taking and returning `Expr`. Nobody wrote that function. The
 plugin module starts with one line, `nanuqBindings()`, and from then on the
-same source file is used three ways:
+same source file is used four ways:
 
 1. **as a library**: `nim c --app:lib stats_plugin.nim` gives the shared library
    that Python Polars loads;
@@ -391,7 +487,9 @@ same source file is used three ways:
    `{.polarsExpr.}` adds an `Expr` twin of every function that calls
    `registerPluginFunction` on it;
 3. **as plain Nim**: `normalSf(12.1, 10.0, 0.5)` is still a proc on floats, for
-   tests and for scalar code.
+   tests and for scalar code;
+4. **as JavaScript**: `nim js` compiles it for the browser, as in the explorer
+   above.
 """
 nbCode:
   echo "scalar: ", normalSf(12.1, 10.0, 0.5)
@@ -432,22 +530,22 @@ The size difference is striking, because a Nim plugin does not embed Polars:
 
 | | wheel (Linux x86_64) | library |
 |---|---|---|
-| polars-stats 0.1.0 (Rust, 14 distributions) | 6.6 MB | 24.5 MB |
-| nanuq-more 0.0.1 (Nim, 7 distributions + ISO weeks) | 0.09 MB | 0.22 MB |
+| polars-stats (Rust, main branch, 14 distributions) | 6.8 MB | 25.1 MB |
+| nanuq-more 0.0.1 (Nim, the same 14 distributions + ISO weeks) | 0.23 MB | 0.73 MB |
 
-polars-stats has twice the distributions, but the gap is not about the maths:
-most of its 24 MB is the copy of Polars that `pyo3-polars` needs to rebuild
-`Series` on its side of the boundary. Builds differ the same way: the Nim
-library compiles from scratch in about 4 seconds; a Rust plugin starts with
-compiling Polars, minutes on a laptop.
+The gap is not about the maths: most of the 25 MB is the copy of Polars that
+`pyo3-polars` needs to rebuild `Series` on its side of the boundary. Builds
+differ the same way: the Nim library compiles from scratch in seconds; a Rust
+plugin starts with compiling Polars, about ten minutes on this 4-core machine.
 """
 
 nbText: """
 ## Is it fast?
 
 Same machine (4 cores), Python Polars 2.1.0, 10 million rows with column-valued
-parameters, best of five, the Nim plugin built by nimlang with `zig cc`
-(`benchmarks/bench_stats.py`):
+parameters, best of five, polars-stats built from its main branch, the Nim
+plugin built by nimlang with `zig cc` (`benchmarks/bench_stats.py`, run by
+hand; the page reads the recorded results):
 """
 block:
   let bench = parseJson(readFile(repo / "benchmarks" / "results" / "stats_10M.json"))
@@ -462,19 +560,26 @@ block:
     "</tbody></table></div>"
 
 nbText: """
-On par, as hoped: within 10% of the Rust plugin for most functions, faster for
-the normal quantile function (Wichura's AS241 against statrs' inverse erfc)
-and for the beta cdf, slower in two places. Sampling is 1.6x slower: Rust
-draws normals with a ziggurat, the Nim version inverts the cdf of one uniform
-draw. The scalar-parameter cdf is 1.3x slower because polars-stats checks a
-constant parameter once, and the Nim kernel checks it on every row; the macro
-could hoist that. On the streaming engine, which runs the plugin on all four
-cores, the normal cdf takes 74 ms in Nim and 82 ms in Rust: the Nim plugin is
-thread-safe as is.
+On par, as hoped, and no more than that. Of the 14 cases the Nim plugin is
+faster by more than 10% in seven (the normal quantile function, by Wichura's
+AS241 against statrs' inverse erfc; the gamma cdf; the Poisson pmf and its
+searched quantiles), within 10% in three, and slower in four:
 
-One lesson from getting there: the first run was ten times slower than
-Rust. A `check(cond, msg)` *proc* built its error message on every row; making
-it a *template* builds the message only when the check fails.
+- the **exponential cdf** and the **scalar-parameter normal cdf**, by 1.2 to
+  1.4x: polars-stats checks a constant parameter once, the Nim kernel checks
+  it on every row (the macro could hoist that);
+- the **gamma quantile function**, 1.7x: the block gives no `ppf`, so it is
+  solved by the generic Newton search, where statrs has a tuned one. A
+  closed-form starting point in the block would close most of the gap;
+- **`samples(8)` of a gamma**, 4x: rand_distr builds a sampler per row and
+  reuses its constants for the 8 draws, the Nim block recomputes them for each
+  draw. One normal draw per row is level (153 against 158 ms) since the Nim
+  sampler moved to a ziggurat.
+
+Two lessons from getting there: a `check(cond, msg)` *proc* built its error
+message on every row (ten times slower than Rust until it became a
+*template*), and the first random streams hashed the seed and the row key again
+for every draw.
 """
 
 nbText: """
@@ -520,60 +625,79 @@ plugin can feel like. With nimlang the same works from a Jupyter cell.
 """
 
 nbText: """
-## Nim or Rust for a Polars plugin?
-
-**What Nim brings**
+## What Nim brings
 
 - **No Polars inside.** A Nim plugin speaks Arrow directly, so it is small
-  (a 90 KB wheel), builds in seconds, and does not have to match the Polars
+  (a 230 KB wheel), builds in seconds, and does not have to match the Polars
   version it runs in, only the plugin ABI. A Rust plugin compiles a Polars of
   its own, and must be rebuilt for each new Polars.
 - **One library for every host.** The same `.so` serves Python Polars and
   Nanuq, and nothing ties it to Python. A pyo3 plugin needs libpython.
 - **Metaprogramming.** A scalar proc becomes a vectorized kernel, a C export,
-  an output schema and a typed Nanuq function, by a macro of about 150 lines.
-  Generic Rust can do much of it; a Nim macro does it from the signature alone.
-- **Accessibility.** The code reads like the maths. A data scientist who knows
-  Python can write `proc gumbelCdf(x, mu, beta: float): float` without meeting
+  an output schema and a typed Nanuq function, by one macro; a block of maths
+  becomes a distribution with 15 methods, by another. Generic Rust can do much
+  of it; a Nim macro works from the code as written.
+- **Accessibility.** The code reads like the maths. Someone who knows Python
+  can write `proc gumbelCdf(x, mu, beta: float): float` without meeting
   lifetimes, `PolarsResult` or `ChunkedArray`.
-- **Interactivity.** Seconds to rebuild, and the same file is a plain Nim module
-  you can test with `echo`.
+- **Interoperability.** One source, many targets and many hosts: a C library
+  for Polars, bindings built at compile time for Nanuq, JavaScript for the
+  explorers above, a plugin written and loaded while this page rendered. That
+  flexibility is what made this exploration quick to iterate on.
+- **Interactivity.** With the JavaScript backend, an explainer can run the real
+  code in the reader's browser, as this one does.
+"""
 
-**What Rust has**
+nbText: """
+## Before switching: pitfalls and risks
 
-- **The Polars API inside the plugin.** Rust plugins work on `Series` and
-  `ChunkedArray` and can call Polars' own kernels (casts, aggregations, string
-  functions). A Nim plugin gets raw Arrow and does those itself;
-  polarsplugin covers numbers, booleans, dates and strings so far, not lists or
-  structs.
-- **The crate ecosystem.** polars-stats leans on `statrs` and `rand_distr`; the
-  Nim version had to write its incomplete gamma and beta functions, the normal
-  quantile and the samplers (all short, but each needs testing).
-- **The beaten path.** pyo3-polars is maintained with Polars, the ABI is
-  documented through it, and maturin builds wheels for every platform. The
-  Nim route depends on an ABI that Polars calls version 0, and on extension
-  types that are unstable.
+A fair list, because some of these would stop me too:
 
-So: not faster, but on par; much lighter; open to Nanuq; and a lower entry
-step for people who don't write Rust. A good fit for elementwise maths and
-types like ISO weeks; for plugins that need Polars' own machinery, Rust stays
-the natural choice.
+- **A small ecosystem.** There is no statrs or rand_distr for Nim, so the
+  incomplete gamma and beta functions, the normal quantile, digamma and every
+  sampler here are hand-written, and only as trustworthy as
+  `tests/check_stats.py`. A new distribution may mean new special functions.
+- **No borrow checker at the boundary.** polarsplugin handles Arrow memory by
+  hand (malloc, release callbacks, who frees what). Writing it produced a
+  double free and a dangling pointer, found by tests and not by the compiler.
+  pyo3-polars keeps this away from Rust plugin authors.
+- **Macros cut both ways.** Two macros generate 210 functions; a mistake inside
+  a block can surface as an error in generated code. And Nim's style
+  insensitivity (`fN` and `fn` are the same name) once silently shadowed a
+  parameter in the macro.
+- **Off the beaten path.** pyo3-polars is maintained with Polars; polarsplugin
+  reimplements an ABI that Polars calls version 0 and may change, on top of
+  extension types that are unstable. nimlang is young, and the Windows and
+  macOS wheels are untested.
+- **Fewer hands.** Many more people can review, maintain or contribute to a
+  Rust or Python library than to a Nim one. For a library that wants
+  contributors, that may matter more than anything above.
+- **Too early, not proven.** Nanuq itself started about a week ago, and this
+  plugin library a few hours ago. polars-stats has more careful tail formulas,
+  constant parameters validated once, many more tests, real documentation and
+  users. Nothing here has met production data yet.
+
+So, Francesco: Rust and Python are the safe choice, and polars-stats shows they
+work very well. But if a few hundred lines of Nim give the same API, on-par speed, a
+wheel thirty times smaller, a plugin Nanuq can load and an explainer that runs
+the code, maybe it is worth a try. For plugins that need Polars' own machinery
+(casts, aggregations, nested types), Rust stays the natural choice.
 """
 
 nbText: """
 ## What's next
 
-- **Francesco's isoweek.** His Rust version is not public yet; once it is, the
-  two designs (storage, operations, how the type displays) can be compared, and
-  the Nim one aligned.
+- **Francesco's verdict.** Starting with whether the Nim API, the results and
+  the code read well to the author of the originals.
 - **Nanuq.** `registerPluginFunction` is a small, self-contained change to
-  Nanuq, a candidate for 0.7 (it also opens Nanuq to Rust plugins).
+  Nanuq ([PR #70](https://github.com/pietroppeter/nanuq/pull/70)), a candidate
+  for the next release; it also opens Nanuq to Rust plugins.
 - **polarsplugin.** Aggregations (not elementwise), list and struct outputs,
-  constant parameters checked once, a faster normal sampler, and Windows and
-  macOS wheels (nimlang can cross-build them from Linux).
-- **nanuq-more.** The prototype lives in the project files until the
-  repository exists; it has the plugin library, both extensions, the Python
-  package, the checks and the benchmarks.
+  constant parameters checked once, a faster normal sampler, Windows and macOS
+  wheels (nimlang can cross-build them from Linux).
+- **nanuq-more.** The [repository](https://github.com/pietroppeter/nanuq-more)
+  has the plugin library, both extensions, the Python package, the checks and
+  the benchmarks; this page is its GitHub Pages site.
 """
 
 nbRawHtml: tabsScript

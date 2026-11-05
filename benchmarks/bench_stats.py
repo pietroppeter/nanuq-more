@@ -50,6 +50,22 @@ cases = [
      lambda: st.expon.cdf(a["shape"], scale=1 / a["sigma"]), None),
     ("Beta cdf", lambda: nm.Beta("shape", "sigma").cdf("q"), lambda: ps.Beta(a="shape", b="sigma").cdf("q"),
      lambda: st.beta.cdf(a["q"], a["shape"], a["sigma"]), None),
+    ("Gamma cdf", lambda: nm.Gamma("shape", "sigma").cdf("lam"), lambda: ps.Gamma(shape="shape", rate="sigma").cdf("lam"),
+     lambda: st.gamma.cdf(a["lam"], a["shape"], scale=1 / a["sigma"]), None),
+    ("Gamma ppf (derived: solved)", lambda: nm.Gamma("shape", "sigma").ppf("q"),
+     lambda: ps.Gamma(shape="shape", rate="sigma").ppf("q"),
+     lambda: st.gamma.ppf(a["q"], a["shape"], scale=1 / a["sigma"]), None),
+    ("Weibull cdf", lambda: nm.Weibull("shape", "sigma").cdf("lam"), lambda: ps.Weibull(shape="shape", scale="sigma").cdf("lam"),
+     lambda: st.weibull_min.cdf(a["lam"], a["shape"], scale=a["sigma"]), None),
+    ("Poisson pmf", lambda: nm.Poisson("lam").pmf("k"), lambda: ps.Poisson(rate="lam").pmf("k"),
+     lambda: st.poisson.pmf(a["k"], a["lam"]), None),
+    ("Poisson ppf (derived: searched)", lambda: nm.Poisson("lam").ppf("q"), lambda: ps.Poisson(rate="lam").ppf("q"),
+     lambda: st.poisson.ppf(a["q"], a["lam"]), None),
+    ("Binomial cdf", lambda: nm.Binomial(40, "q").cdf("k"), lambda: ps.Binomial(n=40, p="q").cdf("k"),
+     lambda: st.binom.cdf(a["k"], 40, a["q"]), None),
+    ("Gamma samples(8)", lambda: nm.Gamma("shape", "sigma").samples(8, seed=1),
+     lambda: ps.Gamma(shape="shape", rate="sigma").samples(8, seed=1),
+     lambda: np.random.default_rng(1).gamma(a["shape"][:, None], 1 / a["sigma"][:, None], (N, 8)), None),
 ]
 
 rows = []

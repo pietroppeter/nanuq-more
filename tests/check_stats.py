@@ -1,58 +1,109 @@
-import polars as pl, numpy as np, scipy.stats as st
-from polars.plugins import register_plugin_function as reg
-from nanuq_more._lib import lib_path; import nanuq_more.isoweek; LIB = str(lib_path())
-def f(name, *args, elementwise=True, **kw):
-    return reg(plugin_path=LIB, function_name=name, args=list(args), is_elementwise=elementwise, use_abs_path=True, kwargs=kw or None, is_deterministic=not name.endswith("Sample"))
+"""Every method of every distribution against scipy, on random parameters.
+
+    python tests/check_stats.py    # prints the worst relative error per method
+"""
+import sys
+
+import numpy as np
+import polars as pl
+import scipy.stats as st
+
+from nanuq_more import stats as ns
+
 rng = np.random.default_rng(1)
-n = 200_000
-df = pl.DataFrame({"x": rng.normal(0, 3, n), "q": rng.uniform(0, 1, n), "mu": rng.normal(0, 1, n), "sigma": rng.uniform(0.1, 3, n),
-                   "a": rng.uniform(0.2, 8, n), "b": rng.uniform(0.2, 8, n), "u": rng.uniform(0,1,n), "k": rng.integers(0, 60, n).astype(float), "lam": rng.uniform(0.5, 50, n)})
-d = {c: df[c].to_numpy() for c in df.columns}
-x, q, mu, sg, a, b, u, k, lam = (d[c] for c in "x q mu sigma a b u k lam".split())
-cases = {
- "normalPdf": (["x","mu","sigma"], st.norm.pdf(x, mu, sg)),
- "normalLogPdf": (["x","mu","sigma"], st.norm.logpdf(x, mu, sg)),
- "normalCdf": (["x","mu","sigma"], st.norm.cdf(x, mu, sg)),
- "normalSf": (["x","mu","sigma"], st.norm.sf(x, mu, sg)),
- "normalPpf": (["q","mu","sigma"], st.norm.ppf(q, mu, sg)),
- "lognormalPdf": (["a","mu","sigma"], st.lognorm.pdf(a, sg, scale=np.exp(mu))),
- "lognormalCdf": (["a","mu","sigma"], st.lognorm.cdf(a, sg, scale=np.exp(mu))),
- "lognormalPpf": (["q","mu","sigma"], st.lognorm.ppf(q, sg, scale=np.exp(mu))),
- "exponentialPdf": (["a","sigma"], st.expon.pdf(a, scale=1/sg)),
- "exponentialCdf": (["a","sigma"], st.expon.cdf(a, scale=1/sg)),
- "exponentialPpf": (["q","sigma"], st.expon.ppf(q, scale=1/sg)),
- "gammaPdf": (["b","a","sigma"], st.gamma.pdf(b, a, scale=1/sg)),
- "gammaCdf": (["b","a","sigma"], st.gamma.cdf(b, a, scale=1/sg)),
- "gammaSf": (["b","a","sigma"], st.gamma.sf(b, a, scale=1/sg)),
- "betaPdf": (["u","a","b"], st.beta.pdf(u, a, b)),
- "betaCdf": (["u","a","b"], st.beta.cdf(u, a, b)),
- "poissonPmf": (["k","lam"], st.poisson.pmf(k, lam)),
- "poissonCdf": (["k","lam"], st.poisson.cdf(k, lam)),
+N = 20_000
+
+
+def U(a, b):
+    return rng.uniform(a, b, N)
+
+
+# (class, params as numpy columns, scipy frozen-distribution factory, value generator)
+CASES = {
+    "Normal": (ns.Normal, {"mu": U(-3, 3), "sigma": U(0.1, 3)},
+               lambda p: st.norm(p["mu"], p["sigma"]), lambda p: p["mu"] + p["sigma"] * rng.normal(0, 3, N)),
+    "LogNormal": (ns.LogNormal, {"mu": U(-1, 1), "sigma": U(0.1, 2)},
+                  lambda p: st.lognorm(p["sigma"], scale=np.exp(p["mu"])), lambda p: rng.lognormal(0, 2, N)),
+    "Exponential": (ns.Exponential, {"rate": U(0.1, 5)},
+                    lambda p: st.expon(scale=1 / p["rate"]), lambda p: rng.exponential(3, N)),
+    "Uniform": (ns.Uniform, {"min": U(-5, 0), "max": U(0.5, 5)},
+                lambda p: st.uniform(p["min"], p["max"] - p["min"]), lambda p: U(-6, 6)),
+    "Gamma": (ns.Gamma, {"shape": U(0.2, 20), "rate": U(0.2, 5)},
+              lambda p: st.gamma(p["shape"], scale=1 / p["rate"]), lambda p: rng.exponential(5, N)),
+    "Beta": (ns.Beta, {"a": U(0.2, 10), "b": U(0.2, 10)},
+             lambda p: st.beta(p["a"], p["b"]), lambda p: U(0, 1)),
+    "Cauchy": (ns.Cauchy, {"loc": U(-3, 3), "scale": U(0.1, 3)},
+               lambda p: st.cauchy(p["loc"], p["scale"]), lambda p: rng.standard_cauchy(N) * 3),
+    "Pareto": (ns.Pareto, {"scale": U(0.5, 3), "shape": U(0.5, 6)},
+               lambda p: st.pareto(p["shape"], scale=p["scale"]), lambda p: U(0, 20)),
+    "Weibull": (ns.Weibull, {"shape": U(0.3, 5), "scale": U(0.2, 4)},
+                lambda p: st.weibull_min(p["shape"], scale=p["scale"]), lambda p: rng.exponential(3, N)),
+    "Bernoulli": (ns.Bernoulli, {"p": U(0, 1)},
+                  lambda p: st.bernoulli(p["p"]), lambda p: rng.integers(-1, 3, N).astype(float)),
+    "Binomial": (ns.Binomial, {"n": rng.integers(1, 500, N), "p": U(0, 1)},
+                 lambda p: st.binom(p["n"], p["p"]), lambda p: np.floor(U(0, 1) * (p["n"] + 2)) - 1),
+    "Poisson": (ns.Poisson, {"rate": U(0.1, 200)},
+                lambda p: st.poisson(p["rate"]), lambda p: rng.integers(0, 260, N).astype(float)),
+    "Geometric": (ns.Geometric, {"p": U(0.01, 1)},
+                  lambda p: st.geom(p["p"]), lambda p: rng.integers(0, 60, N).astype(float)),
+    "DiscreteUniform": (ns.DiscreteUniform, {"min": rng.integers(-20, 5, N), "max": rng.integers(5, 40, N)},
+                        lambda p: st.randint(p["min"], p["max"] + 1), lambda p: rng.integers(-25, 45, N).astype(float)),
 }
-out = df.select(**{name: f(name, *args) for name, (args, _) in cases.items()})
-for name, (_, ref) in cases.items():
-    got = out[name].to_numpy()
-    rel = np.abs(got - ref) / np.maximum(np.abs(ref), 1e-300)
-    rel = rel[np.isfinite(ref) & (np.abs(ref) > 1e-280)]
-    print(f"{name:16s} max rel err vs scipy {rel.max():.1e}  median {np.median(rel):.1e}")
-# samples: moments + reproducibility
-RI = pl.int_range(0, pl.len(), dtype=pl.UInt64)
-smp = df.select(n=f("normalSample", RI, pl.lit(2.0), pl.lit(0.5), seed=42),
-                g=f("gammaSample", RI, pl.lit(3.0), pl.lit(2.0), seed=42),
-                p=f("poissonSample", RI, "lam", seed=7),
-                bt=f("betaSample", RI, pl.lit(2.0), pl.lit(5.0), seed=1))
-print(smp.describe())
-print("poisson mean ratio", (smp["p"].to_numpy() / lam).mean())
-print("ks normal", st.kstest(smp["n"], st.norm(2, .5).cdf).pvalue, "ks gamma", st.kstest(smp["g"], st.gamma(3, scale=.5).cdf).pvalue, "ks beta", st.kstest(smp["bt"], st.beta(2,5).cdf).pvalue)
-again = pl.concat([df.head(1000), df.slice(1000)], rechunk=False).select(n=f("normalSample", RI, pl.lit(2.0), pl.lit(0.5), seed=42))
-print("reproducible:", again["n"].equals(smp["n"]))
-# nulls, broadcasting, errors
-t = pl.DataFrame({"x": [0.0, None, 1.0], "s": [1.0, 2.0, None]})
-print(t.with_columns(c=f("normalCdf", "x", pl.lit(0.0), "s")))
-try:
-    t.with_columns(c=f("normalCdf", "x", pl.lit(0.0), pl.lit(-1.0)))
-except Exception as e: print("error:", type(e).__name__, str(e).splitlines()[0])
-# group_by / over contexts
-g = pl.DataFrame({"grp": ["a","a","b","b"], "x": [1.0, 2.0, 3.0, 4.0]})
-print(g.with_columns(z=f("normalCdf", "x", pl.col("x").mean().over("grp"), pl.col("x").std().over("grp"))))
-print(g.lazy().group_by("grp").agg(f("normalPdf","x",pl.lit(0.0),pl.lit(1.0))).collect())
+
+worst = 0.0
+for name, (cls, params, ref, values) in CASES.items():
+    discrete = issubclass(cls, ns.DiscreteDistribution)
+    x = values(params)
+    q = U(0, 1)
+    d = ref(params)
+    df = pl.DataFrame({**params, "x": x, "q": q})
+    dist = cls(**{k: k for k in params})
+    dens = "pmf" if discrete else "pdf"
+    methods = {
+        dens: (getattr(dist, dens)("x"), getattr(d, dens)(x)),
+        "log_" + dens: (getattr(dist, "log_" + dens)("x"), getattr(d, "log" + dens)(x)),
+        "cdf": (dist.cdf("x"), d.cdf(x)), "log_cdf": (dist.log_cdf("x"), d.logcdf(x)),
+        "sf": (dist.sf("x"), d.sf(x)), "log_sf": (dist.log_sf("x"), d.logsf(x)),
+        "ppf": (dist.ppf("q"), d.ppf(q)), "isf": (dist.isf("q"), d.isf(q)),
+        "mean": (dist.mean(), d.mean()), "variance": (dist.variance(), d.var()),
+        "std": (dist.std(), d.std()), "median": (dist.median(), d.median()),
+        "entropy": (dist.entropy(), d.entropy()),
+    }
+    out = df.select(**{m: e for m, (e, _) in methods.items()})
+    line = []
+    for m, (_, want) in methods.items():
+        got = out[m].to_numpy().astype(float)
+        want = np.broadcast_to(np.asarray(want, dtype=float), got.shape)
+        same = (got == want) | (np.isnan(got) & np.isnan(want))
+        # Relative error; on the log scale, absolute error below 1 (so -1e-30 and 0 agree).
+        floor = 1.0 if m.startswith("log_") else 1e-300
+        with np.errstate(all="ignore"):
+            rel = np.where(same, 0.0, np.abs(got - want) / np.maximum(np.abs(want), floor))
+        nan_mismatch = int(np.sum(np.isnan(got) != np.isnan(want)))
+        if nan_mismatch:
+            print(f"  {name}.{m}: {nan_mismatch} rows NaN on one side only")
+        rel = np.nan_to_num(rel, nan=0.0)
+        # Far tails, where both sides underflow differently, say little.
+        keep = (want > -650) if m.startswith("log_") else (np.abs(want) > 1e-250)
+        rel = rel[keep | same]
+        err = float(np.max(rel)) if rel.size else 0.0
+        worst = max(worst, err if m not in ("ppf", "isf") or not discrete else 0.0)
+        line.append(f"{m} {err:.0e}")
+    print(f"{name:16s}", "  ".join(line))
+
+# samples: moments against the distribution, and samples(1) == sample
+print()
+for name, (cls, params, ref, _) in CASES.items():
+    p0 = {k: (float(v[0]) if v.dtype.kind == "f" else int(v[0])) for k, v in params.items()}
+    dist = cls(**p0)
+    df = pl.DataFrame({"i": range(200_000)})
+    s = df.select(dist.sample(seed=3).alias("s"), dist.samples(4, seed=3).alias("m"))
+    first = s["m"].arr.first()
+    draws = s["s"].cast(pl.Float64).to_numpy()
+    d = ref({k: np.asarray(v) for k, v in p0.items()})
+    ks = st.kstest(draws, d.cdf).pvalue if not issubclass(cls, ns.DiscreteDistribution) else float("nan")
+    print(f"{name:16s} {s['s'].dtype!s:8s} mean {draws.mean():9.4f} vs {float(d.mean()):9.4f}   "
+          f"samples(4)[0] == sample: {first.equals(s['s'], check_names=False)}   ks p {ks:.2f}")
+
+print("\nworst relative error (excluding discrete ppf/isf):", f"{worst:.1e}")
+sys.exit(0 if worst < 1e-4 else 1)  # the binomial log tails below 1e-280 lose digits

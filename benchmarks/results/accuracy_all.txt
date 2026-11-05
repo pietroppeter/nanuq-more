@@ -1,0 +1,31 @@
+Normal           pdf 6e-15  log_pdf 2e-16  cdf 3e-14  log_cdf 7e-16  sf 3e-14  log_sf 6e-16  ppf 1e-12  isf 4e-12  mean 0e+00  variance 0e+00  std 0e+00  median 0e+00  entropy 7e-13
+LogNormal        pdf 3e-13  log_pdf 3e-15  cdf 5e-13  log_cdf 4e-13  sf 3e-13  log_sf 4e-13  ppf 3e-15  isf 3e-15  mean 5e-16  variance 1e-14  std 5e-15  median 2e-16  entropy 2e-12
+Exponential      pdf 1e-14  log_pdf 4e-16  cdf 6e-16  log_cdf 4e-16  sf 1e-14  log_sf 2e-16  ppf 4e-16  isf 4e-16  mean 0e+00  variance 4e-16  std 2e-16  median 2e-16  entropy 6e-13
+Uniform          pdf 0e+00  log_pdf 2e-16  cdf 0e+00  log_cdf 3e-16  sf 7e-13  log_sf 6e-14  ppf 0e+00  isf 3e-12  mean 0e+00  variance 3e-16  std 3e-16  median 0e+00  entropy 2e-16
+Gamma            pdf 4e-14  log_pdf 3e-14  cdf 2e-14  log_cdf 1e-14  sf 3e-14  log_sf 2e-14  ppf 4e-14  isf 2e-13  mean 2e-16  variance 4e-16  std 3e-16  median 5e-15  entropy 8e-11
+Beta             pdf 2e-14  log_pdf 1e-14  cdf 2e-14  log_cdf 1e-14  sf 2e-14  log_sf 1e-14  ppf 4e-14  isf 4e-13  mean 0e+00  variance 0e+00  std 0e+00  median 2e-14  entropy 4e-13
+Cauchy           pdf 4e-16  log_pdf 5e-16  cdf 3e-16  log_cdf 4e-16  sf 3e-16  log_sf 4e-16  ppf 2e-12  isf 2e-12  mean 0e+00  variance 0e+00  std 0e+00  median 0e+00  entropy 1e-15
+Pareto           pdf 5e-15  log_pdf 2e-15  cdf 6e-14  log_cdf 1e-14  sf 3e-15  log_sf 9e-16  ppf 1e-15  isf 2e-15  mean 4e-16  variance 5e-16  std 3e-16  median 4e-16  entropy 3e-11
+Weibull          pdf 1e-13  log_pdf 6e-16  cdf 5e-16  log_cdf 4e-16  sf 1e-13  log_sf 2e-16  ppf 7e-16  isf 5e-16  mean 6e-16  variance 2e-14  std 1e-14  median 3e-16  entropy 1e-11
+Bernoulli        pmf 1e-15  log_pmf 2e-16  cdf 0e+00  log_cdf 2e-16  sf 0e+00  log_sf 1e-16  ppf 0e+00  isf 0e+00  mean 0e+00  variance 2e-12  std 8e-13  median 0e+00  entropy 4e-16
+Binomial         pmf 1e-12  log_pmf 3e-13  cdf 1e-12  log_cdf 1e-06  sf 1e-12  log_sf 2e-05  ppf 0e+00  isf 0e+00  mean 0e+00  variance 2e-12  std 8e-13  median 0e+00  entropy 5e-13
+Poisson          pmf 3e-13  log_pmf 6e-14  cdf 3e-13  log_cdf 2e-13  sf 5e-13  log_sf 3e-13  ppf 0e+00  isf 0e+00  mean 0e+00  variance 0e+00  std 0e+00  median 0e+00  entropy 7e-14
+Geometric        pmf 7e-14  log_pmf 5e-16  cdf 3e-16  log_cdf 4e-16  sf 3e-14  log_sf 4e-16  ppf 0e+00  isf 0e+00  mean 0e+00  variance 3e-16  std 2e-16  median 0e+00  entropy 5e-16
+DiscreteUniform  pmf 0e+00  log_pmf 0e+00  cdf 0e+00  log_cdf 1e-16  sf 3e-15  log_sf 7e-16  ppf 0e+00  isf 0e+00  mean 0e+00  variance 0e+00  std 0e+00  median 0e+00  entropy 0e+00
+
+Normal           Float64  mean    0.0718 vs    0.0709   samples(4)[0] == sample: True   ks p 0.69
+LogNormal        Float64  mean    2.4548 vs    2.4739   samples(4)[0] == sample: True   ks p 0.69
+Exponential      Float64  mean    1.1308 vs    1.1289   samples(4)[0] == sample: True   ks p 0.90
+Uniform          Float64  mean    0.6176 vs    0.6168   samples(4)[0] == sample: True   ks p 0.90
+Gamma            Float64  mean    1.8131 vs    1.8132   samples(4)[0] == sample: True   ks p 0.79
+Beta             Float64  mean    0.5654 vs    0.5651   samples(4)[0] == sample: True   ks p 0.27
+Cauchy           Float64  mean   -0.3938 vs       nan   samples(4)[0] == sample: True   ks p 0.90
+Pareto           Float64  mean    1.4509 vs    1.4490   samples(4)[0] == sample: True   ks p 0.90
+Weibull          Float64  mean    1.2085 vs    1.2084   samples(4)[0] == sample: True   ks p 0.90
+Bernoulli        Boolean  mean    0.3943 vs    0.3946   samples(4)[0] == sample: True   ks p nan
+Binomial         UInt64   mean    2.4429 vs    2.4461   samples(4)[0] == sample: True   ks p nan
+Poisson          UInt64   mean   52.4236 vs   52.4103   samples(4)[0] == sample: True   ks p nan
+Geometric        UInt64   mean    2.8261 vs    2.8213   samples(4)[0] == sample: True   ks p nan
+DiscreteUniform  Int64    mean   -7.4970 vs   -7.5000   samples(4)[0] == sample: True   ks p nan
+
+worst relative error (excluding discrete ppf/isf): 1.8e-05

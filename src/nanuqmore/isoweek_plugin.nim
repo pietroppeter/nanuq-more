@@ -33,7 +33,7 @@ proc `$`*(w: IsoWeek): string = $toShortStr(w)
 
 # ------------------------------------------------- calendar arithmetic, on days since 1970-01-01
 
-proc daysFromCivil(y, m, d: int): int =
+proc daysFromCivil*(y, m, d: int): int =
   ## Howard Hinnant's days_from_civil.
   let y = if m <= 2: y - 1 else: y
   let era = (if y >= 0: y else: y - 399) div 400

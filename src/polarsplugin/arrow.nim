@@ -96,6 +96,11 @@ proc extensionName*(s: ptr ArrowSchema): string =
 
 proc releaseSchema(s: ptr ArrowSchema) {.cdecl, gcsafe, raises: [].} =
   if s.isNil or s.release.isNil: return
+  for k in 0 ..< s.nChildren.int:
+    let c = s.children[k]
+    if not c.release.isNil: c.release(c)
+    cfree(c)
+  cfree(s.children)
   cfree(s.format); cfree(s.name); cfree(s.metadata); cfree(s.privateData)
   s.release = nil
 
@@ -105,16 +110,30 @@ proc newSchema*(format, name: string, metadata: openArray[(string, string)] = []
               release: releaseSchema,
               privateData: allocC(1))   # Polars reads a nil privateData as "no schema"
 
+proc newSchema*(format, name: string, child: ArrowSchema): ArrowSchema =
+  ## A nested type (a list or an array) with one child field.
+  result = newSchema(format, name)
+  let c = cast[ptr ArrowSchema](allocC(sizeof(ArrowSchema)))
+  c[] = child
+  result.children = cast[ptr UncheckedArray[ptr ArrowSchema]](allocC(sizeof(pointer)))
+  result.children[0] = c
+  result.nChildren = 1
+
 
 # ---------------------------------------------------------------- arrays we export
 
 type ArrayPrivate = object
   buffers: array[4, pointer]
+  child: ptr ArrowArray
+  childPtr: array[1, ptr ArrowArray]
 
 proc releaseArray(a: ptr ArrowArray) {.cdecl, gcsafe, raises: [].} =
   if a.isNil or a.release.isNil: return
   let priv = cast[ptr ArrayPrivate](a.privateData)
   for b in priv.buffers: cfree(b)
+  if not priv.child.isNil:
+    if not priv.child.release.isNil: priv.child.release(priv.child)
+    cfree(priv.child)
   cfree(priv)
   a.release = nil
 
@@ -125,6 +144,16 @@ proc newArray*(length, nullCount: int, buffers: openArray[pointer]): ArrowArray 
   ArrowArray(length: length, nullCount: nullCount, nBuffers: buffers.len,
              buffers: cast[ptr UncheckedArray[pointer]](priv.buffers.addr),
              release: releaseArray, privateData: priv)
+
+proc newArray*(length, nullCount: int, buffers: openArray[pointer], child: ArrowArray): ArrowArray =
+  ## A nested array (a list or an array) that owns its one child.
+  result = newArray(length, nullCount, buffers)
+  let priv = cast[ptr ArrayPrivate](result.privateData)
+  priv.child = cast[ptr ArrowArray](allocC(sizeof(ArrowArray)))
+  priv.child[] = child
+  priv.childPtr[0] = priv.child
+  result.children = cast[ptr UncheckedArray[ptr ArrowArray]](priv.childPtr.addr)
+  result.nChildren = 1
 
 # ---------------------------------------------------------------- series we export
 
