@@ -1,0 +1,41 @@
+{
+ "rows": 10000000,
+ "polars": "2.1.0",
+ "results": [
+  {
+   "case": "date -> '2026-W45' string",
+   "nim": 0.42876988899999446,
+   "iwd": 0.4800769130000049
+  },
+  {
+   "case": "date -> week (Nim: the isoweek type, no string)",
+   "nim": 0.24043276599999786,
+   "iwd": null
+  },
+  {
+   "case": "'2026-W45' -> Monday date",
+   "nim": 0.5309106859999986,
+   "iwd": 0.9955359749999957
+  },
+  {
+   "case": "validate '2026-W45' strings",
+   "nim": 0.4375621530000444,
+   "iwd": 0.15334021500001427
+  },
+  {
+   "case": "add n weeks (per row)",
+   "nim": 0.3893068200000016,
+   "iwd": 1.813023679999958
+  },
+  {
+   "case": "weeks between two columns",
+   "nim": 0.589731028000017,
+   "iwd": 3.9165965469999833
+  },
+  {
+   "case": "IsoWeek(s) + 3, map_elements, 100000 rows",
+   "nim": 0.005726070999969579,
+   "iwd": 0.8969873780000057
+  }
+ ]
+}
