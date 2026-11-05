@@ -3,8 +3,8 @@ We want more (who?)
 
 Polars expression plugins written in Nim, for [Nanuq](https://github.com/pietroppeter/nanuq)
 and for Python Polars, from the same shared library. Exploration prototype (5 November 2026);
-the write-up is `docs/nim_plugins.nim` ("Polars plugins, without the Rust"), published as
-this repository's GitHub Pages site.
+the write-up is the explainer **[Polars plugins, without the Rust](https://pietroppeter.github.io/nanuq-more/)**
+(source: `docs/nim_plugins.nim`), this repository's GitHub Pages site.
 
 - `src/polarsplugin.nim` (`polarsplugin/native.nim`, `arrow.nim`, `pickle.nim`): the Polars
   plugin ABI in pure Nim (Arrow C data interface, `SeriesExport`, pickled kwargs) and the
