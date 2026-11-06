@@ -2,8 +2,8 @@
 ##
 ## Render (from the repo root, with the nanuq repo next to this one):
 ##   NANUQ_MORE_PYTHON=<a python with polars, polars-stats and nanuq_more> \
-##   nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src \
-##     -d:nanuqLibDir=<a Nanuq library with expression plugins> docs/nim_plugins.nim
+##   nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src docs/nim_plugins.nim
+## (a Nanuq checkout at v0.6.1 or later, which has registerPluginFunction)
 
 import nimib
 import std/[json, math, os, osproc, strutils, strformat, xmltree, times, monotimes]
@@ -689,9 +689,9 @@ nbText: """
 
 - **Francesco's verdict.** Starting with whether the Nim API, the results and
   the code read well to the author of the originals.
-- **Nanuq.** `registerPluginFunction` is a small, self-contained change to
-  Nanuq ([PR #70](https://github.com/pietroppeter/nanuq/pull/70)), a candidate
-  for the next release; it also opens Nanuq to Rust plugins.
+- **Nanuq.** `registerPluginFunction` shipped in
+  [Nanuq 0.6.1](https://github.com/pietroppeter/nanuq/blob/main/CHANGELOG.md);
+  it also opens Nanuq to Rust plugins.
 - **polarsplugin.** Aggregations (not elementwise), list and struct outputs,
   constant parameters checked once, a faster normal sampler, Windows and macOS
   wheels (nimlang can cross-build them from Linux).
