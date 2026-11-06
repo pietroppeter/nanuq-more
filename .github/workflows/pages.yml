@@ -12,9 +12,10 @@ on:
   workflow_dispatch:
 
 env:
-  # Nanuq 0.6.1, the first release with registerPluginFunction; its prebuilt library
-  # (lib-v0.6.1) is downloaded, so no Rust is built here.
-  NANUQ_REF: v0.6.1
+  # Nanuq 0.6.1, the first release with registerPluginFunction (the main commit that
+  # added the lib-v0.6.1 sums; tag v0.6.1 once it exists). Its prebuilt library is
+  # downloaded, so no Rust is built here.
+  NANUQ_REF: 1da3d9943f7af2791b803976fb1c4e3343a067c0
 
 jobs:
   render:
