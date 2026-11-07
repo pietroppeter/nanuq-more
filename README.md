@@ -36,7 +36,7 @@ df.with_columns(week=pl.col("day").isoweek.from_date(),
 
 ## Use from Nanuq
 
-Needs a Nanuq with `registerPluginFunction` (Nanuq branch `claude/project-thread-ez686y`).
+Needs Nanuq 0.6.1 or later (`registerPluginFunction`).
 Importing a plugin module builds its library at compile time and gives `Expr` versions of its
 functions:
 
@@ -60,6 +60,5 @@ CI (`.github/workflows/pages.yml`) renders it on every change and publishes it o
 
 ```sh
 NANUQ_MORE_PYTHON=<python with polars, polars-stats, scipy and nanuq_more> \
-nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src \
-  -d:nanuqLibDir=<Nanuq library built from the branch above> docs/nim_plugins.nim
+nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src docs/nim_plugins.nim
 ```

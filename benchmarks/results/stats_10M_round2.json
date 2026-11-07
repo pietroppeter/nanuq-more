@@ -1,0 +1,92 @@
+{
+ "rows": 10000000,
+ "polars": "2.1.0",
+ "polars_stats_before": "20f64ab",
+ "polars_stats_after": "3fe324e (#119)",
+ "results": [
+  {
+   "case": "Normal pdf",
+   "nim": 0.12594107300014912,
+   "rust_before": 0.1435769459999392,
+   "rust_after": 0.122485018000134
+  },
+  {
+   "case": "Normal cdf",
+   "nim": 0.2716441869999926,
+   "rust_before": 0.3094230859999243,
+   "rust_after": 0.2985915690001093
+  },
+  {
+   "case": "Normal ppf",
+   "nim": 0.1578276380000716,
+   "rust_before": 0.2562150940000265,
+   "rust_after": 0.23353720799991606
+  },
+  {
+   "case": "Normal sample",
+   "nim": 0.15324388599992744,
+   "rust_before": 0.15104515799998808,
+   "rust_after": 0.13479224799993972
+  },
+  {
+   "case": "Normal cdf, scalar params",
+   "nim": 0.2696536890000516,
+   "rust_before": 0.21387381199997435,
+   "rust_after": 0.22562993499991535
+  },
+  {
+   "case": "Exponential cdf",
+   "nim": 0.13770046300010108,
+   "rust_before": 0.10262324699988312,
+   "rust_after": 0.11350348799987842
+  },
+  {
+   "case": "Beta cdf",
+   "nim": 1.94909514699998,
+   "rust_before": 2.0649349299999358,
+   "rust_after": 2.046737740000026
+  },
+  {
+   "case": "Gamma cdf",
+   "nim": 1.3008287239999845,
+   "rust_before": 1.6558405709999988,
+   "rust_after": 1.661038526000084
+  },
+  {
+   "case": "Gamma ppf (derived: solved)",
+   "nim": 9.81253688400011,
+   "rust_before": 5.834531298000002,
+   "rust_after": 5.863883165000061
+  },
+  {
+   "case": "Weibull cdf",
+   "nim": 0.3044929669999874,
+   "rust_before": 0.32237694699983876,
+   "rust_after": 0.32227587199986374
+  },
+  {
+   "case": "Poisson pmf",
+   "nim": 0.23964230900014627,
+   "rust_before": 0.3862389250000433,
+   "rust_after": 0.4013576079998984
+  },
+  {
+   "case": "Poisson ppf (derived: searched)",
+   "nim": 2.5587062609999975,
+   "rust_before": 3.1621029010000257,
+   "rust_after": 3.3750767669998822
+  },
+  {
+   "case": "Binomial cdf",
+   "nim": 1.8144823239999823,
+   "rust_before": 2.0278319320000264,
+   "rust_after": 2.013506500000176
+  },
+  {
+   "case": "Gamma samples(8)",
+   "nim": 2.1343376749998697,
+   "rust_before": 0.5372374500000205,
+   "rust_after": 0.5609747389999029
+  }
+ ]
+}

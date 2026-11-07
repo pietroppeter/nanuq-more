@@ -12,10 +12,10 @@ on:
   workflow_dispatch:
 
 env:
-  # The Nanuq with registerPluginFunction (nanuq PR #70). Use main once it is
-  # merged, and the prebuilt library (-d:nanuqLib=prebuilt) once a lib release has it.
-  NANUQ_REF: claude/project-thread-ez686y
-  NANUQ_LIB: nanuq/src/rust/target/release
+  # Nanuq 0.6.1, the first release with registerPluginFunction (the main commit that
+  # added the lib-v0.6.1 sums; tag v0.6.1 once it exists). Its prebuilt library is
+  # downloaded, so no Rust is built here.
+  NANUQ_REF: 1da3d9943f7af2791b803976fb1c4e3343a067c0
 
 jobs:
   render:
@@ -27,22 +27,6 @@ jobs:
           repository: pietroppeter/nanuq
           ref: ${{ env.NANUQ_REF }}
           path: nanuq
-      # Nanuq's Rust bridge, cached by a hash of its sources: a hit skips Rust entirely
-      - id: key
-        run: echo "key=nanuq-ffi-${{ runner.os }}-${{ hashFiles('nanuq/src/rust/Cargo.toml', 'nanuq/src/rust/Cargo.lock', 'nanuq/src/rust/src/**') }}" >> "$GITHUB_OUTPUT"
-      - id: lib-cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.NANUQ_LIB }}/libnanuq_ffi.a
-          key: ${{ steps.key.outputs.key }}
-      - if: steps.lib-cache.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-toolchain@stable
-      - if: steps.lib-cache.outputs.cache-hit != 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: nanuq/src/rust
-      - if: steps.lib-cache.outputs.cache-hit != 'true'
-        run: cargo build --release --manifest-path nanuq/src/rust/Cargo.toml
       - uses: jiro4989/setup-nim-action@v2
         with:
           nim-version: "2.2.4"
@@ -62,7 +46,7 @@ jobs:
       - name: Render the explainer
         run: |
           NANUQ_MORE_PYTHON=$PWD/.venv/bin/python nim r -d:release --hints:off \
-            --path:nanuq/src --path:nanuq/docs --path:src -d:nanuqLibDir=$PWD/$NANUQ_LIB \
+            --path:nanuq/src --path:nanuq/docs --path:src -d:nanuqLib=prebuilt \
             docs/nim_plugins.nim
       - run: |
           mkdir -p _site

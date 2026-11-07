@@ -2,8 +2,8 @@
 ##
 ## Render (from the repo root, with the nanuq repo next to this one):
 ##   NANUQ_MORE_PYTHON=<a python with polars, polars-stats and nanuq_more> \
-##   nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src \
-##     -d:nanuqLibDir=<a Nanuq library with expression plugins> docs/nim_plugins.nim
+##   nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src docs/nim_plugins.nim
+## (a Nanuq checkout at v0.6.1 or later, which has registerPluginFunction)
 
 import nimib
 import std/[json, math, os, osproc, strutils, strformat, xmltree, times, monotimes]
@@ -687,17 +687,60 @@ the code, maybe it is worth a try. For plugins that need Polars' own machinery
 nbText: """
 ## What's next
 
-- **Francesco's verdict.** Starting with whether the Nim API, the results and
-  the code read well to the author of the originals.
-- **Nanuq.** `registerPluginFunction` is a small, self-contained change to
-  Nanuq ([PR #70](https://github.com/pietroppeter/nanuq/pull/70)), a candidate
-  for the next release; it also opens Nanuq to Rust plugins.
+- **Francesco's verdict.** It arrived as a pull request: see the appendix.
+- **Nanuq.** `registerPluginFunction` shipped in
+  [Nanuq 0.6.1](https://github.com/pietroppeter/nanuq/blob/main/CHANGELOG.md);
+  it also opens Nanuq to Rust plugins.
 - **polarsplugin.** Aggregations (not elementwise), list and struct outputs,
   constant parameters checked once, a faster normal sampler, Windows and macOS
   wheels (nimlang can cross-build them from Linux).
 - **nanuq-more.** The [repository](https://github.com/pietroppeter/nanuq-more)
   has the plugin library, both extensions, the Python package, the checks and
   the benchmarks; this page is its GitHub Pages site.
+"""
+
+nbText: """
+## Appendix: round two
+
+A day after reading this page, Francesco answered the way a Rust developer
+answers: with a pull request.
+[polars-stats#119](https://github.com/FBruzzesi/polars-stats/pull/119),
+"make the column-parameter domain check inlinable and vectorised", checks
+column-valued parameters in one vectorised pass, with the null slots masked,
+before the per-row math. That is the very spot where this page boasted about
+Nim templates. Fair enough.
+
+Same benchmark, same machine, with polars-stats from just before (20f64ab)
+and just after (3fe324e), in one session
+(`benchmarks/results/stats_10M_round2.json`):
+"""
+block:
+  let bench = parseJson(readFile(repo / "benchmarks" / "results" / "stats_10M_round2.json"))
+  var rows = ""
+  for r in bench["results"]:
+    let ms = proc (k: string): string = $int(round(r[k].getFloat * 1000))
+    rows.add &"<tr><td>{r[\"case\"].getStr}</td><td>{ms(\"nim\")}</td><td>{ms(\"rust_before\")}</td>" &
+              &"<td>{ms(\"rust_after\")}</td></tr>"
+  nbRawHtml: "<div class=\"tablewrap\"><table class=\"bench\"><thead><tr><th>ms</th><th>Nim plugin</th>" &
+    "<th>polars-stats before</th><th>polars-stats after #119</th></tr></thead><tbody>" & rows &
+    "</tbody></table></div>"
+
+nbText: """
+The cheap kernels felt it most, as they should: there the check is a large
+share of the work. The normal pdf went from 144 to 122 ms and is now level
+with Nim (126). Normal sampling went from 151 to 135 ms, a nose ahead of Nim's
+ziggurat (140 to 153 ms across runs). The normal quantile went from 256 to
+234 ms, still behind AS241. Everything else moved within the noise of the
+machine, about 10% between runs.
+
+The new scorecard: the Nim plugin is faster by more than 10% in five cases
+(seven before), level in four, slower in five.
+
+The real result is elsewhere, though. This page set out to convince Francesco
+to give Nim a try, and it convinced him to make polars-stats faster instead.
+Mission accomplished, in reverse. The ball is in Nim's court now: hoisting
+constant checks out of the row loop in the macro, a closed-form start for the
+gamma quantile, sampler constants reused across draws. Round three, someday.
 """
 
 nbRawHtml: tabsScript
