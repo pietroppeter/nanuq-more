@@ -38,20 +38,33 @@ jobs:
           nim-version: "2.2.4"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: sudo apt-get update && sudo apt-get install -y libpcre3
+      # nimib, installed once (a fixed key: bump v1 to refresh it)
       - uses: actions/cache@v4
         with:
           path: ~/.nimble
-          key: nimble-pages-2.2.4-${{ hashFiles('.github/workflows/pages.yml') }}
-      - run: nimble install -y nimib
+          key: nimble-nimib-${{ runner.os }}-2.2.4-v1
+      - run: nimble path nimib > /dev/null 2>&1 || nimble install -y nimib
+      # Nim's build cache: the C files of an unchanged module are not recompiled, and the
+      # plugin libraries the page builds at compile time are reused while src/ is unchanged
+      - uses: actions/cache@v4
+        with:
+          path: .nimcache
+          key: nimcache-${{ runner.os }}-${{ env.NANUQ_REF }}-${{ hashFiles('src/**', 'docs/**') }}
+          restore-keys: nimcache-${{ runner.os }}-${{ env.NANUQ_REF }}-
       # The Python package, built by nimlang into a wheel, for the page's Python cells
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
       - run: |
           uv build --wheel
           uv venv .venv
           uv pip install --python .venv/bin/python dist/*.whl
       - name: Render the explainer
         run: |
+          # lld links against the 300 MB Polars library in under a second (GNU ld: ~10 s)
           NANUQ_MORE_PYTHON=$PWD/.venv/bin/python nim r -d:release --hints:off \
+            --nimcache:$PWD/.nimcache --passL:-fuse-ld=lld --passL:-Wl,--strip-debug \
             --path:nanuq/src --path:nanuq/docs --path:src -d:nanuqLib=prebuilt \
             docs/nim_plugins.nim
       - run: |

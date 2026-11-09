@@ -3,3 +3,4 @@ dist/
 *.so
 *.html
 __pycache__/
+/.nimcache/
