@@ -17,10 +17,10 @@ nb.title = "Polars plugins, without the Rust"
 nb.doc.filename = "nim_plugins.html"
 nb.useNanuqTheme(
   titleHtml = "Polars plugins, <em>without</em> the Rust",
-  eyebrow = "nanuq-more · 5 November 2026 · exploration",
+  eyebrow = "nanuq-more · 5 November 2026, updated 9 November · exploration",
   epigraph = "Francesco, a friend, likes to extend Polars (in Rust and Python). " &
              "Let's try to convince him to give Nim a try.",
-  meta = "exploration report · Nanuq 0.6 (+ plugins), Polars 2.1.0, Nim " & NimVersion &
+  meta = "exploration report · Nanuq 0.6.1, Polars 2.1.0, Nim " & NimVersion &
          " · rendered with nimib",
   summary = "How Polars expression plugins work, and Francesco's two extensions (ISO weeks " &
             "and all of polars-stats) written in Nim, loaded by Nanuq and by Python Polars, " &
@@ -140,6 +140,13 @@ proc excerpt(path, start: string): string =
   got.join("\n")
 
 # ---------------------------------------------------------------------------
+
+nbText: """
+> **Updates.** Francesco answered, in Rust:
+> [round two](#appendix-round-two) (6 November, polars-stats#119) and
+> [round three](#appendix-round-three-polars-stats-0-2) (9 November,
+> polars-stats 0.2).
+"""
 
 nbText: """
 Francesco Bruzzesi, a friend, likes to extend Polars, in Rust and in Python.
@@ -746,7 +753,7 @@ gamma quantile, sampler constants reused across draws. Round three, someday.
 """
 
 nbText: """
-### Round three: polars-stats 0.2
+## Appendix: round three, polars-stats 0.2
 
 Two days later polars-stats 0.2.0 was on PyPI. Besides #119 it brings
 [#120](https://github.com/FBruzzesi/polars-stats/pull/120): with column
