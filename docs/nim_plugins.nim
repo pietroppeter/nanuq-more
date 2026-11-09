@@ -687,7 +687,8 @@ the code, maybe it is worth a try. For plugins that need Polars' own machinery
 nbText: """
 ## What's next
 
-- **Francesco's verdict.** It arrived as a pull request: see the appendix.
+- **Francesco's verdict.** It arrived as two pull requests and a release:
+  see the appendix.
 - **Nanuq.** `registerPluginFunction` shipped in
   [Nanuq 0.6.1](https://github.com/pietroppeter/nanuq/blob/main/CHANGELOG.md);
   it also opens Nanuq to Rust plugins.
@@ -741,6 +742,71 @@ to give Nim a try, and it convinced him to make polars-stats faster instead.
 Mission accomplished, in reverse. The ball is in Nim's court now: hoisting
 constant checks out of the row loop in the macro, a closed-form start for the
 gamma quantile, sampler constants reused across draws. Round three, someday.
+(Someday came two days later.)
+"""
+
+nbText: """
+### Round three: polars-stats 0.2
+
+Two days later polars-stats 0.2.0 was on PyPI. Besides #119 it brings
+[#120](https://github.com/FBruzzesi/polars-stats/pull/120): with column
+parameters, `pdf`, `cdf`, `ppf` and friends now run through one row loop that
+writes every answer into a single buffer and allocates the validity bitmap
+only at the first null. Bernoulli even picks its answer without a branch, so
+that a column of random 0s and 1s does not trip the branch predictor.
+Francesco measured 0.90x on geomean at a million rows, and the most on the
+cheapest formulas.
+
+At ten million rows, same benchmark as above (on a slower machine than the
+earlier rounds, so compare columns, not tables;
+`benchmarks/results/stats_10M_round3.json`):
+"""
+block:
+  let bench = parseJson(readFile(repo / "benchmarks" / "results" / "stats_10M_round3.json"))
+  var rows = ""
+  for r in bench["results"]:
+    let ms = proc (k: string): string = $int(round(r[k].getFloat * 1000))
+    rows.add &"<tr><td>{r[\"case\"].getStr}</td><td>{ms(\"nim\")}</td><td>{ms(\"rust_before\")}</td>" &
+              &"<td>{ms(\"rust_119\")}</td><td>{ms(\"rust_020\")}</td></tr>"
+  nbRawHtml: "<div class=\"tablewrap\"><table class=\"bench\"><thead><tr><th>ms</th><th>Nim plugin</th>" &
+    "<th>polars-stats before #119</th><th>after #119</th><th>0.2.0</th></tr></thead><tbody>" & rows &
+    "</tbody></table></div>"
+
+nbText: """
+Here the new loop hides behind memory traffic: 0.2.0 matches the #119 build
+within the noise. The scorecard is still five faster, four level, five
+slower, but the normal pdf has crossed to Rust's side (138 ms against Nim's
+165), while normal sampling is back to level.
+
+At a million rows, where Francesco measured, it is another story. Cheap
+formulas, column parameters, best of 21 calls
+(`benchmarks/bench_cheap.py`, `benchmarks/results/cheap_1M_round3.json`):
+"""
+block:
+  let bench = parseJson(readFile(repo / "benchmarks" / "results" / "cheap_1M_round3.json"))
+  var rows = ""
+  for r in bench["results"]:
+    let ms = proc (k: string): string = formatFloat(r[k].getFloat * 1000, ffDecimal, 1)
+    rows.add &"<tr><td>{r[\"case\"].getStr}</td><td>{ms(\"nim\")}</td><td>{ms(\"rust_119\")}</td>" &
+              &"<td>{ms(\"rust_020\")}</td></tr>"
+  nbRawHtml: "<div class=\"tablewrap\"><table class=\"bench\"><thead><tr><th>ms</th><th>Nim plugin</th>" &
+    "<th>polars-stats after #119</th><th>0.2.0</th></tr></thead><tbody>" & rows &
+    "</tbody></table></div>"
+
+nbText: """
+The Bernoulli pmf went from 11.2 to 3.2 ms, the uniform pdf from 5.9 to 3.3,
+the normal pdf from 12.2 to 9.3. And the Nim plugin sits at 12 to 14 ms
+whatever the formula, uniform or normal alike: that looks like a fixed cost
+of about 12 ns a row in polarsplugin's row wrapper (per-row null and
+parameter checks, an output builder), which the cheapest formulas cannot
+hide. On Bernoulli and uniform, polars-stats now spends about a quarter of
+that on the whole row.
+
+Round three goes to Francesco, no contest. On the bright side, Nim's homework
+is now a precise list rather than a vague hope: a row loop with no per-row
+overhead (a validity bitmap only when there is a null, exactly like #120),
+constant checks hoisted out of the loop, then the gamma quantile and the
+samplers. The ball is in Nim's court, and it is bouncing rather fast.
 """
 
 nbRawHtml: tabsScript
