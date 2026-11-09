@@ -27,6 +27,12 @@ jobs:
           repository: pietroppeter/nanuq
           ref: ${{ env.NANUQ_REF }}
           path: nanuq
+      # the prebuilt Nanuq library, downloaded once per Nanuq version (a GitHub
+      # release download can time out)
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/nanuq
+          key: nanuq-lib-${{ runner.os }}-${{ env.NANUQ_REF }}
       - uses: jiro4989/setup-nim-action@v2
         with:
           nim-version: "2.2.4"
