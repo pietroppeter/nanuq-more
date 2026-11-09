@@ -37,7 +37,7 @@ jobs:
         with:
           nim-version: "2.2.4"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - run: sudo apt-get update && sudo apt-get install -y libpcre3
+      - run: sudo apt-get update && sudo apt-get install -y libpcre3 lld  # lld: the runner image no longer has ld.lld on PATH
       # nimib, installed once (a fixed key: bump v1 to refresh it)
       - uses: actions/cache@v4
         with:
