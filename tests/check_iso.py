@@ -14,3 +14,4 @@ out = big.with_columns(s=f("isoweekFormat", f("isoweek","d")))
 exp = [f"{d.isocalendar()[0]}-W{d.isocalendar()[1]:02d}" for d in big["d"]]
 print("dates checked:", len(exp), "mismatches:", sum(a!=b for a,b in zip(out["s"], exp)))
 print(df.group_by("w").agg(pl.len()).sort("w"))
+assert sum(a != b for a, b in zip(out["s"], exp)) == 0, "isoweek disagrees with isocalendar"
