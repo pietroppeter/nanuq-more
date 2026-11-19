@@ -2,7 +2,7 @@
 ## and a `polarsExpr` that changes nothing, so a plugin module's procs compile
 ## to JavaScript as plain functions.
 
-import std/[macros, options, tables]
+import std/[options, tables]
 import rowrng
 export options, tables, rowrng
 

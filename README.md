@@ -52,14 +52,15 @@ df.withColumns(isoweek(col"day").alias("week"), normalSf(col"x", col"mu", col"si
 
 - `tests/check_iso.py`, `tests/check_stats.py`: against Python's `isocalendar` and scipy.stats
   (every method of every distribution; table in `benchmarks/results/accuracy_all.txt`).
-- `tests/test_nanuq_*.nim`: the same functions from Nanuq.
+- `tests/test_nanuq_*.nim`: the same functions from Nanuq (`tests/all.nim` runs both in one program).
 - `benchmarks/bench_stats.py`, `bench_isoweek.py`: against polars-stats, scipy, plain Polars
   expressions and iso-week-date; run by hand (not in CI), results in `benchmarks/results/`,
   which the explainer reads.
 
 ## Render the explainers
 
-CI (`.github/workflows/pages.yml`) renders them on every change and publishes them on main. Locally:
+CI (`.github/workflows/ci.yml`) renders both in one program (`docs/all.nim`) on every change and
+publishes them on main; next to it, a test job runs the checks and the Nim tests. Locally:
 
 ```sh
 NANUQ_MORE_PYTHON=<python with polars, polars-stats, scipy and nanuq_more> \

@@ -6,7 +6,7 @@
 ##
 ## Build: nim c --app:lib -d:release -d:useMalloc --threads:on isoweek_plugin.nim
 
-import std/[strutils, math]
+import std/math
 import ../polarsplugin
 nanuqBindings()
 

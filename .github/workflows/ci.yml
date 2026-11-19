@@ -1,0 +1,140 @@
+name: CI
+
+# Two jobs side by side:
+# - render: renders the explainers (docs/nim_plugins.nim, docs/distributions.nim) in one
+#   program (docs/all.nim) and, on main, publishes them as the GitHub Pages site.
+#   Benchmarks are not run here: the pages read the results recorded in
+#   benchmarks/results/ (rerun them by hand, see benchmarks/).
+# - test: the checks against Python's isocalendar and scipy.stats (tests/check_*.py) and
+#   the Nim tests from Nanuq (tests/all.nim).
+# A weekly run on main keeps main's caches alive (GitHub drops a cache unused for 7 days,
+# and a pull request can only read main's caches, not another branch's) and catches
+# breakage from new releases of polars, scipy and numpy.
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "docs/**", "tests/**", "benchmarks/results/**", "pyproject.toml", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["src/**", "docs/**", "tests/**", "benchmarks/results/**", "pyproject.toml", ".github/workflows/ci.yml"]
+  schedule:
+    - cron: "17 5 * * 1"  # Mondays, 05:17 UTC
+  workflow_dispatch:
+
+env:
+  # Nanuq 0.6.1, the first release with registerPluginFunction (the main commit that
+  # added the lib-v0.6.1 sums; tag v0.6.1 once it exists). Its prebuilt library is
+  # downloaded, so no Rust is built here.
+  NANUQ_REF: 1da3d9943f7af2791b803976fb1c4e3343a067c0
+  # lld links against the 300 MB Polars library in under a second (GNU ld: ~10 s)
+  NIM_FLAGS: >-
+    -d:release --hints:off --passL:-fuse-ld=lld --passL:-Wl,--strip-debug
+    --path:nanuq/src --path:nanuq/docs --path:src --path:docs -d:nanuqLib=prebuilt
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04  # still ships libpcre3, which nimib's markdown renderer needs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: pietroppeter/nanuq
+          ref: ${{ env.NANUQ_REF }}
+          path: nanuq
+      # the prebuilt Nanuq library, downloaded once per Nanuq version (a GitHub
+      # release download can time out)
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/nanuq
+          key: nanuq-lib-${{ runner.os }}-${{ env.NANUQ_REF }}
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: "2.2.4"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: sudo apt-get update && sudo apt-get install -y libpcre3 lld  # lld: the runner image no longer has ld.lld on PATH
+      # nimib, installed once (a fixed key: bump v1 to refresh it)
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nimble
+          key: nimble-nimib-${{ runner.os }}-2.2.4-v1
+      - run: nimble path nimib > /dev/null 2>&1 || nimble install -y nimib
+      # Nim's build cache: the C files of an unchanged module are not recompiled, and the
+      # plugin libraries the pages build at compile time are reused while src/ is unchanged
+      - uses: actions/cache@v6
+        with:
+          path: .nimcache
+          key: nimcache-${{ runner.os }}-${{ env.NANUQ_REF }}-${{ hashFiles('src/**', 'docs/**') }}
+          restore-keys: nimcache-${{ runner.os }}-${{ env.NANUQ_REF }}-
+      # The Python package, built by nimlang into a wheel, for the pages' Python cells
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - run: |
+          uv build --wheel
+          uv venv .venv
+          uv pip install --python .venv/bin/python dist/*.whl
+      - name: Render the explainers
+        run: NANUQ_MORE_PYTHON=$PWD/.venv/bin/python nim r $NIM_FLAGS --nimcache:$PWD/.nimcache/all docs/all.nim
+      - run: |
+          mkdir -p _site
+          cp docs/nim_plugins.html _site/index.html
+          cp docs/distributions.html _site/distributions.html
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: pietroppeter/nanuq
+          ref: ${{ env.NANUQ_REF }}
+          path: nanuq
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/nanuq
+          key: nanuq-lib-${{ runner.os }}-${{ env.NANUQ_REF }}
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: "2.2.4"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: sudo apt-get update && sudo apt-get install -y lld
+      - uses: actions/cache@v6
+        with:
+          path: .nimcache
+          key: nimcache-test-${{ runner.os }}-${{ env.NANUQ_REF }}-${{ hashFiles('src/**', 'tests/**') }}
+          restore-keys: nimcache-test-${{ runner.os }}-${{ env.NANUQ_REF }}-
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+          cache-suffix: test  # its own cache: this job also installs scipy and numpy
+      - run: |
+          uv build --wheel
+          uv venv .venv
+          uv pip install --python .venv/bin/python dist/*.whl scipy numpy
+      - name: Check against isocalendar
+        run: .venv/bin/python -I tests/check_iso.py
+      - name: Check against scipy.stats
+        run: .venv/bin/python -I tests/check_stats.py
+      - name: Nim tests from Nanuq
+        run: nim r $NIM_FLAGS --nimcache:$PWD/.nimcache/tests tests/all.nim
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [render, test]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
