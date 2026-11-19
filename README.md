@@ -4,7 +4,10 @@ We want more (who?)
 Polars expression plugins written in Nim, for [Nanuq](https://github.com/pietroppeter/nanuq)
 and for Python Polars, from the same shared library. Exploration prototype (5 November 2026);
 the write-up is the explainer **[Polars plugins, without the Rust](https://pietroppeter.github.io/nanuq-more/)**
-(source: `docs/nim_plugins.nim`), this repository's GitHub Pages site.
+(source: `docs/nim_plugins.nim`), this repository's GitHub Pages site. How the distributions are
+built (the `continuous`/`discrete` macros, `{.polarsExpr.}`, the numerics) is in the deep dive
+**[Inside the distributions](https://pietroppeter.github.io/nanuq-more/distributions.html)**
+(source: `docs/distributions.nim`).
 
 - `src/polarsplugin.nim` (`polarsplugin/native.nim`, `arrow.nim`, `pickle.nim`): the Polars
   plugin ABI in pure Nim (Arrow C data interface, `SeriesExport`, pickled kwargs) and the
@@ -54,11 +57,13 @@ df.withColumns(isoweek(col"day").alias("week"), normalSf(col"x", col"mu", col"si
   expressions and iso-week-date; run by hand (not in CI), results in `benchmarks/results/`,
   which the explainer reads.
 
-## Render the explainer
+## Render the explainers
 
-CI (`.github/workflows/pages.yml`) renders it on every change and publishes it on main. Locally:
+CI (`.github/workflows/pages.yml`) renders them on every change and publishes them on main. Locally:
 
 ```sh
 NANUQ_MORE_PYTHON=<python with polars, polars-stats, scipy and nanuq_more> \
 nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src docs/nim_plugins.nim
+NANUQ_MORE_PYTHON=<python with polars and nanuq_more> \
+nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src --path:docs docs/distributions.nim
 ```

@@ -414,6 +414,9 @@ That is not all metaprogramming: polars-stats is more careful in places
 (dedicated tail formulas, constant parameters checked once, many more tests),
 and it has documentation. But the shape of the code is the point: one
 distribution, one short block.
+
+What the macros write, line by line, and how the numbers are computed is in
+the deep dive [Inside the distributions](https://pietroppeter.github.io/nanuq-more/distributions.html).
 """
 
 nbText: """
