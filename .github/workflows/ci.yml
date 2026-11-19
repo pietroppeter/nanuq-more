@@ -22,9 +22,9 @@ on:
 
 env:
   # Nanuq 0.6.1 (lib-v0.6.1, the first with registerPluginFunction) plus the docs theme's
-  # review mode and folded source files (nanuq#75, its first commit). Its prebuilt library
+  # review mode and folded source files (nanuq#75, its head commit). Its prebuilt library
   # is downloaded, so no Rust is built here.
-  NANUQ_REF: 37224c5cae8d1bd5760776c3589b1c9525339ac6
+  NANUQ_REF: 87f72a99e292785d95d573514b011a7f505707ff
   # lld links against the 300 MB Polars library in under a second (GNU ld: ~10 s)
   NIM_FLAGS: >-
     -d:release --hints:off --passL:-fuse-ld=lld --passL:-Wl,--strip-debug
