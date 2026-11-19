@@ -728,4 +728,19 @@ What this design costs, as of today:
 The homework list at the end of the plugins explainer starts with the first one.
 """
 
+nbSourceFiles:
+  nbFoldCode "src/nanuqmore/stats_plugin.nim"
+  nbFoldCode "src/nanuqmore/distmacro.nim"
+  nbFoldCode "src/nanuqmore/specfun.nim"
+  nbFoldCode "src/polarsplugin.nim"
+  nbFoldCode "src/polarsplugin/native.nim"
+  nbFoldCode "src/polarsplugin/arrow.nim"
+  nbFoldCode "src/polarsplugin/pickle.nim"
+  nbFoldCode "src/polarsplugin/rowrng.nim"
+  nbFoldCode "src/polarsplugin/jsstub.nim"
+  nbFoldCode "src/nanuq_more/plugins.nim"
+  nbFoldCode "src/nanuq_more/_lib.py"
+  nbFoldCode "src/nanuq_more/stats.py"
+  nbFoldCode "tests/check_stats.py"
+
 nbSave
