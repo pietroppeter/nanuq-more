@@ -7,7 +7,7 @@
 ##   nim r -d:release --path:../nanuq/src --path:../nanuq/docs --path:src --path:docs docs/distributions.nim
 
 import nimib
-import std/[os, osproc, strutils, strformat, math, sequtils, json]
+import std/[os, osproc, strutils, strformat, math, sequtils, json, algorithm, monotimes, times, options]
 import nanuqtheme
 import nanuq
 import polarsplugin
@@ -593,28 +593,306 @@ nbText: """
 `uniform` takes the top 53 bits and adds half a step, so it never returns
 0 or 1, and `ln(u)` or `ppf(u)` are always finite.
 
-The samplers, by distribution:
+How each distribution turns these uniform numbers into its own draws is
+the next section.
+"""
 
-- **normal**: the 128-layer ziggurat of Marsaglia and Tsang. The tables are
-  computed by a Nim proc at compile time (`const (zigK, zigW, zigF) =
-  zigTables()`), so the library carries them as constants. About 99% of draws
-  take one 64-bit random number and a comparison.
-- **gamma**: Marsaglia and Tsang's method, a normal draw cubed and accepted
-  or rejected; for a shape below 1, a draw at shape + 1 times `u^(1/shape)`.
-- **beta**: `X / (X + Y)` for two gamma draws.
-- **Poisson**: sequential inversion below a rate of 30; above it, Hörmann's
-  PTRS (transformed rejection with squeeze), whose cost hardly depends on the
-  rate.
-- **binomial**: Devroye's splitting by beta order statistics: a beta draw
-  splits `n` trials in two halves and decides which half the boundary falls
-  in, until 64 trials are left, which are drawn one by one.
-- **the rest** by inversion (exponential, Cauchy, Pareto, Weibull, geometric)
-  or directly (uniform, Bernoulli, discrete uniform).
 
-Seeded draws repeat within nanuq-more, but they are not meant to match
-polars-stats' draws number for number: the samplers differ. What
-`tests/check_stats.py` checks is that they have the right moments and pass
-Kolmogorov-Smirnov tests against the distribution.
+# Helpers for the sampling section: what a sampler costs, how its draws are
+# spread, and how far they are from the distribution.
+
+proc costLine(label: string, numbers, ns: float) =
+  echo &"{label:<26} {numbers:>7.2f} {ns:>9.1f}"
+
+template cost(label: string, n: int, draw: untyped) =
+  ## Draws `n` values on one row's stream; prints random numbers used and ns per draw.
+  block:
+    var rng {.inject.} = RowRng(seed: 1)
+    rng.startRow(0)
+    var sink = 0.0
+    let t0 = getMonoTime()
+    for _ in 0 ..< n: sink += float(draw)
+    let ns = float((getMonoTime() - t0).inNanoseconds) / float(n)
+    doAssert sink == sink
+    costLine(label, float(rng.counter) / float(n), ns)
+
+template drawMany(n: int, draw: untyped): seq[float] =
+  ## `n` draws, one row each (as in a Polars column).
+  block:
+    var rng {.inject.} = RowRng(seed: 1)
+    var got = newSeq[float](n)
+    for row in 0 ..< n:
+      rng.startRow(uint64(row))
+      got[row] = float(draw)
+    got
+
+proc histogram(draws: seq[float], lo, hi: float, bins: int, cdf: proc (x: float): float) =
+  ## Bars for the draws in each bin; `|` marks where the distribution says the bar should end.
+  var counts = newSeq[int](bins)
+  let w = (hi - lo) / float(bins)
+  for d in draws:
+    let b = int(floor((d - lo) / w))
+    if b >= 0 and b < bins: inc counts[b]
+  var expected = newSeq[float](bins)
+  for b in 0 ..< bins:
+    let a = lo + float(b) * w
+    expected[b] = float(draws.len) * (cdf(a + w) - cdf(a))
+  let scale = 50 / max(expected)       # the tallest expected bar is 50 characters
+  for b in 0 ..< bins:
+    let a = lo + float(b) * w
+    let bar = int(round(float(counts[b]) * scale))
+    let mark = int(round(expected[b] * scale))
+    var line = repeat('#', bar)
+    if mark >= line.len: line.add repeat(' ', mark - line.len) & "|"
+    else: line[mark] = '|'
+    echo &"{a:>5.2f} {line}"
+
+proc ksDistance(draws: seq[float], cdf: proc (x: float): float): float =
+  ## Kolmogorov-Smirnov: the largest gap between the draws' cdf and the true one.
+  let sorted = draws.sorted
+  let n = float(sorted.len)
+  for i, x in sorted:
+    let f = cdf(x)
+    result = max(result, max(abs(float(i + 1) / n - f), abs(f - float(i) / n)))
+
+nbText: """
+## Sampling, from scratch
+
+The exponential block says `proc sample(rng: var RowRng): float =
+-ln(rng.uniform) / rate`, one line. The binomial block calls `binomialDraw`,
+twenty lines of splitting and coin flips, and the normal one goes through a
+table of 128 layers built at compile time. This section explains why the
+samplers look so different, starting from what a sampler is.
+
+### What a sampler does
+
+A computer has no source of "normal numbers" or "Poisson numbers". It has one
+thing: a stream of random bits (here `RowRng`), which `rng.uniform` turns into
+a number between 0 and 1 where every value is equally likely. A **sampler**
+for a distribution is a recipe that turns one or more of those uniform numbers
+into a number that behaves like a draw from the distribution: drawn many times,
+the values pile up the way the distribution's density says they should.
+
+Every recipe is judged on two things:
+
+- **Is it exact?** The draws must follow the distribution exactly, not
+  approximately. All recipes below are exact (up to floating-point rounding).
+- **What does it cost?** How many uniform numbers one draw uses up, and how
+  much arithmetic it does with them. That is where the recipes differ.
+
+### Recipe 1: inversion
+
+The cdf of a distribution, `F(x)`, is the chance that a draw is at most `x`.
+It climbs from 0 to 1. Turn it around: take a uniform `u` and find the `x`
+where `F(x) = u`. That `x` is the quantile, `ppf(u)`, and it is a draw from
+the distribution. Why: the chance that `ppf(u) <= x` is the chance that
+`u <= F(x)`, and for a uniform `u` that chance is exactly `F(x)`.
+
+In pictures: the cdf is steep where the distribution has a lot of values, so
+a whole range of `u` values lands on a narrow range of `x`. Where the cdf is
+flat, few `u` values land.
+
+For the exponential, `F(x) = 1 - exp(-rate * x)`, which solves to
+`x = -ln(1 - u) / rate`. Since `1 - u` is just as uniform as `u`, the block
+writes `-ln(u) / rate`. That is the whole sampler: one uniform and one
+logarithm. Here are a few uniforms and the draws they become (rate 1):
+"""
+
+nbCode:
+  for u in [0.01, 0.25, 0.5, 0.75, 0.99]:
+    echo &"u = {u:<5}  ->  x = -ln(1 - u) = {-ln(1 - u):.3f}"
+
+nbText: """
+Half of the draws are below 0.693 (the median, `ln 2`), and a 1% chance gives
+a draw above 4.6. Do that 100,000 times, one row each as in a Polars column,
+and count how many draws fall in each bin of width 0.5. Each `#` is a share
+of the draws; the `|` marks where the exponential distribution says the bar
+should end:
+"""
+
+nbCode:
+  let expDraws = drawMany(100_000, exponentialSample(rng, 1.0))
+  histogram(expDraws, 0.0, 5.0, 10, proc (x: float): float = exponentialCdf(x, 1.0))
+
+nbText: """
+Inversion works for every distribution, which is why it is the macro's
+default: a block without `sample` gets `ppf(rng.uniform)`. It is a good
+sampler when the quantile has a formula, so the exponential, Cauchy, Pareto,
+Weibull, geometric and both uniforms use it, each with its own formula. It is
+a bad one when the quantile has to be *solved*: for the gamma, each draw
+would run the Newton solver of the numerics section, about seven evaluations
+of the incomplete gamma function. That is why the other distributions bring
+recipes of their own. The table below, measured while this page rendered,
+compares the costs (random 64-bit numbers used per draw, and nanoseconds per
+draw on this machine):
+"""
+
+nbCode:
+  echo "sampler                    numbers   ns/draw"
+  cost("uniform", 2_000_000, rng.uniform)
+  cost("exponential, inversion", 2_000_000, exponentialSample(rng, 1.0))
+  cost("normal, inversion", 2_000_000, ndtri(rng.uniform))
+  cost("normal, ziggurat", 2_000_000, normalSample(rng, 0.0, 1.0))
+  cost("gamma(2), inversion", 20_000, get(gammaPpf(rng.uniform, 2.0, 1.0)))
+  cost("gamma(2), Marsaglia-Tsang", 2_000_000, gammaSample(rng, 2.0, 1.0))
+
+nbText: """
+Solving the gamma quantile makes inversion about 20 times slower than the
+gamma sampler nanuq-more uses. The normal has a quantile formula (`ndtri`),
+but even there a specialised method wins.
+
+### Recipe 2: a ziggurat for the normal
+
+The ziggurat method covers the bell curve with a stack of 128 horizontal
+rectangles of equal area, wide at the bottom and narrow at the top, like a
+stepped pyramid. A draw picks one rectangle and a horizontal position in it,
+both from a single 64-bit random number (7 bits for the rectangle, 32 for the
+position). Most of each rectangle lies under the curve. When the point lands
+there, which happens about 99% of the time, its horizontal position is the
+draw: one comparison and one multiplication, no logarithm or square root.
+Only a point in the thin sliver outside the curve, or in the bottom layer
+that reaches into the infinite tail, needs a slower second test.
+
+The table above shows it: barely more than one random number per draw (the
+extra is the second tests), and faster than inversion. The rectangles' sizes come from a
+small computation, which a Nim `const` runs at compile time, so the library
+carries the 384 numbers as constants.
+
+### Recipe 3: rejection, for the gamma
+
+Rejection sampling is a dartboard. Draw the density curve, put a box around
+it, throw darts uniformly into the box, and keep the `x` of every dart that
+lands under the curve. The kept values follow the distribution exactly,
+because there are more of them where the curve is higher. The rejected darts
+are the price, so the art is to throw from a shape that hugs the curve (a
+*proposal*), not from a box.
+
+Marsaglia and Tsang's gamma sampler uses a transformed normal draw as its
+proposal, which hugs the gamma density closely:
+"""
+
+nbSource(sourceBlock("src/nanuqmore/stats_plugin.nim", "proc stdGamma"))
+
+nbText: """
+Each attempt costs one normal draw and one uniform, and a cheap formula
+accepts more than 95% of the attempts for any shape of 1 or more, so a draw
+costs about two random numbers whatever the shape. For a shape below 1 the
+proposal fits badly, so the code draws at shape + 1 and shrinks the result
+by `u^(1/shape)`, a known identity: one more uniform per draw.
+
+A rejection sampler uses a *varying* number of random numbers per draw. That
+is where the per-row streams pay off: one row's rejected attempts use up
+numbers from that row's stream only, so they cannot shift the draws of the
+rows after it, however Polars splits the column.
+
+### Recipe 4: build from other distributions
+
+Some distributions are easy to make from others. Two gamma draws `X` (shape
+`a`) and `Y` (shape `b`) give a beta draw: `X / (X + Y)` follows Beta(a, b)
+exactly. The beta block says just that, and a beta draw costs two gamma draws.
+The log-normal is `exp` of a normal draw, and a Bernoulli is "is `u` below
+`p`?".
+
+### Discrete distributions: counting instead of measuring
+
+For a distribution on whole numbers, inversion becomes a walk: start at 0,
+add up the probabilities of 0, 1, 2, ... until the sum passes `u`, and return
+where it stopped. It is exact and needs one uniform, but the walk is about as
+long as the mean, so it gets slower as the rate grows. The Poisson sampler
+walks for rates below 30. From 30 on it switches to PTRS, a rejection sampler
+by Hörmann with a proposal shaped like the Poisson's own bell, whose cost is
+about the same at any rate:
+"""
+
+nbCode:
+  echo "sampler                    numbers   ns/draw"
+  for rate in [1, 10, 29]:
+    cost(&"poisson({rate}), walk", 1_000_000, float(poissonSample(rng, float(rate))))
+  for rate in [31, 10_000, 1_000_000]:
+    cost(&"poisson({rate}), PTRS", 1_000_000, float(poissonSample(rng, float(rate))))
+  cost("poisson(10000), quantile", 2_000, get(poissonPpf(rng.uniform, 10_000.0)))
+
+nbText: """
+The walk takes longer as the rate goes from 1 to 29, then PTRS jumps in at a
+roughly constant cost (a bit over 2 random numbers per draw, for the rejected
+attempts). The last line shows the default the macro would have given: a
+search over the cdf for every draw, dozens of times slower.
+
+### The binomial: the expensive one
+
+A binomial draw counts the successes in `n` trials. The obvious sampler flips
+`n` coins: `n` uniforms, fine for small `n`, hopeless for a million. nanuq-more
+splits instead. A beta draw tells where the middle trial's uniform would fall,
+which decides whether the boundary `p` lies in the lower or the upper half of
+the trials; then it recurses into that half, with `p` rescaled. Each round
+halves `n` for the price of two gamma draws, and the last 64 or fewer trials
+are flipped one by one:
+"""
+
+nbCode:
+  echo "sampler                    numbers   ns/draw"
+  for n in [10'i64, 64, 1_000, 1_000_000, 1_000_000_000]:
+    cost(&"binomial({n}, 0.3)", 200_000, float(binomialSample(rng, n, 0.3)))
+
+nbText: """
+The cost grows with the logarithm of `n`: a billion trials cost less than
+200 coin flips would. But it is still the slowest sampler here,
+at around a microsecond for large `n`. Rejection samplers for the binomial
+(BTPE, which NumPy uses) take a constant few random numbers at any `n`; that
+is the obvious next improvement.
+
+### Are the draws right?
+
+A sampler can be fast and wrong, so here is a check on 100,000 draws (one row
+each) of several distributions. The **Kolmogorov-Smirnov distance** is the
+largest gap between the share of draws below `x` and the cdf `F(x)`, over all
+`x`. For a correct sampler it shrinks like `1 / sqrt(n)`: `sqrt(n)` times the
+distance stays below about 1.36 in 95% of runs, whatever the distribution.
+A wrong sampler gives a value that grows with `n`.
+"""
+
+nbCode:
+  let n = 100_000
+  let checks = [
+    ("exponential(1)", drawMany(n, exponentialSample(rng, 1.0)),
+     proc (x: float): float = exponentialCdf(x, 1.0)),
+    ("normal(0, 1)", drawMany(n, normalSample(rng, 0.0, 1.0)),
+     proc (x: float): float = normalCdf(x, 0.0, 1.0)),
+    ("gamma(0.5, 1)", drawMany(n, gammaSample(rng, 0.5, 1.0)),
+     proc (x: float): float = gammaCdf(x, 0.5, 1.0)),
+    ("gamma(7, 1)", drawMany(n, gammaSample(rng, 7.0, 1.0)),
+     proc (x: float): float = gammaCdf(x, 7.0, 1.0)),
+    ("beta(2, 3)", drawMany(n, betaSample(rng, 2.0, 3.0)),
+     proc (x: float): float = betaCdf(x, 2.0, 3.0))]
+  for (name, draws, cdf) in checks:
+    echo &"{name:<16} sqrt(n) * distance = {sqrt(float(n)) * ksDistance(draws, cdf):.2f}"
+
+nbText: """
+For discrete distributions the same idea compares how often each value comes
+up with its probability; `tests/check_stats.py` runs these checks, plus means
+and variances, for all fourteen distributions against scipy.stats. Seeded
+draws repeat within nanuq-more, but they are not meant to match polars-stats'
+draws number for number: the recipes differ, so the same seed gives different
+(and equally valid) numbers.
+
+### The whole table
+
+| distribution | recipe | random numbers per draw |
+|---|---|---|
+| uniform, discrete uniform | scale `u` | 1 |
+| exponential, Cauchy, Pareto, Weibull, geometric | inversion by formula | 1 |
+| Bernoulli | `u < p` | 1 |
+| normal | ziggurat | about 1 |
+| log-normal | `exp` of a normal | about 1 |
+| gamma | Marsaglia-Tsang rejection | about 2 (3 for shape below 1) |
+| beta | two gammas | about 4 |
+| Poisson | walk below rate 30, PTRS from 30 | 1, then about 2 |
+| binomial | beta splitting, then coin flips | grows with log n |
+
+So the one-line exponential and the twenty-line binomial are the same idea
+(turn uniform numbers into draws, exactly) at different prices: when the
+quantile has a formula, inversion is short and fast, and otherwise a
+sampler has to be cleverer than the default.
 """
 
 # ---------------------------------------------------------------------------
