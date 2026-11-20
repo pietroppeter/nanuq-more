@@ -820,4 +820,21 @@ samplers. The ball is in Nim's court, and it is bouncing rather fast.
 """
 
 nbRawHtml: tabsScript
+nbSourceFiles:
+  nbFoldCode "src/polarsplugin.nim"
+  nbFoldCode "src/polarsplugin/native.nim"
+  nbFoldCode "src/polarsplugin/arrow.nim"
+  nbFoldCode "src/polarsplugin/pickle.nim"
+  nbFoldCode "src/polarsplugin/rowrng.nim"
+  nbFoldCode "src/nanuqmore/isoweek_plugin.nim"
+  nbFoldCode "src/nanuqmore/stats_plugin.nim"
+  nbFoldCode "src/nanuq_more/plugins.nim"
+  nbFoldCode "src/nanuq_more/isoweek.py"
+  nbFoldCode "src/nanuq_more/stats.py"
+  nbFoldCode "src/nanuq_more/_lib.py"
+  nbFoldCode "benchmarks/bench_isoweek.py"
+  nbFoldCode "benchmarks/bench_stats.py"
+  nbFoldCode "benchmarks/bench_cheap.py"
+  nbFoldCode "tests/check_stats.py"
+
 nbSave

@@ -21,10 +21,10 @@ on:
   workflow_dispatch:
 
 env:
-  # Nanuq 0.6.1, the first release with registerPluginFunction (the main commit that
-  # added the lib-v0.6.1 sums; tag v0.6.1 once it exists). Its prebuilt library is
-  # downloaded, so no Rust is built here.
-  NANUQ_REF: 1da3d9943f7af2791b803976fb1c4e3343a067c0
+  # Nanuq 0.6.1 (lib-v0.6.1, the first with registerPluginFunction) plus the docs theme's
+  # review mode and folded source files (nanuq#75, its head commit). Its prebuilt library
+  # is downloaded, so no Rust is built here.
+  NANUQ_REF: 87f72a99e292785d95d573514b011a7f505707ff
   # lld links against the 300 MB Polars library in under a second (GNU ld: ~10 s)
   NIM_FLAGS: >-
     -d:release --hints:off --passL:-fuse-ld=lld --passL:-Wl,--strip-debug
@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-24.04  # still ships libpcre3, which nimib's markdown renderer needs
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # a page's review-mode version is the number of commits that changed it
       - uses: actions/checkout@v7
         with:
           repository: pietroppeter/nanuq
