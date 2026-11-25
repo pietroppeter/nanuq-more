@@ -157,6 +157,9 @@ converter toPickle*(x: float): PickleValue = PickleValue(kind: pkFloat, f: x)
 converter toPickle*(x: int): PickleValue = PickleValue(kind: pkInt, i: x)
 converter toPickle*(x: bool): PickleValue = PickleValue(kind: pkBool, b: x)
 converter toPickle*(x: string): PickleValue = PickleValue(kind: pkStr, s: x)
+proc toPickle*(x: seq[string]): PickleValue =
+  result = PickleValue(kind: pkList)
+  for s in x: result.items.add PickleValue(kind: pkStr, s: s)
 
 proc to*(v: PickleValue, T: typedesc): T =
   ## `v` as a Nim value of type `T` (numbers widen, ints become floats).
@@ -174,5 +177,9 @@ proc to*(v: PickleValue, T: typedesc): T =
   elif T is string:
     if v.kind != pkStr: raise newException(PickleError, "expected a string, got " & $v)
     v.s
+  elif T is seq[string]:
+    if v.kind == pkStr: return @[v.s]
+    if v.kind != pkList: raise newException(PickleError, "expected a list of strings, got " & $v)
+    for it in v.items: result.add it.to(string)
   else:
     {.error: "unsupported kwargs field type " & $T.}

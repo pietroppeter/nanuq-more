@@ -114,7 +114,7 @@ proc `[]`*[T](c: Col[T], i: int): T {.inline.} =
 
 proc fmtOf(e: ptr SeriesExport): string = $e.field.format
 
-proc numericAt(fmt: string, a: ptr ArrowArray, i: int): float64 =
+proc numericAt*(fmt: string, a: ptr ArrowArray, i: int): float64 =
   let buf = a.buffers[1]
   let j = a.offset.int + i
   case fmt
@@ -131,7 +131,7 @@ proc numericAt(fmt: string, a: ptr ArrowArray, i: int): float64 =
   of "b": (if bit(cast[ptr UncheckedArray[uint8]](buf), j): 1.0 else: 0.0)
   else: raise newException(PluginError, "expected a numeric column, got Arrow format '" & fmt & "'")
 
-proc intAt(fmt: string, a: ptr ArrowArray, i: int): int64 =
+proc intAt*(fmt: string, a: ptr ArrowArray, i: int): int64 =
   let buf = a.buffers[1]
   let j = a.offset.int + i
   case fmt
@@ -145,7 +145,7 @@ proc intAt(fmt: string, a: ptr ArrowArray, i: int): int64 =
   of "C": cast[ptr UncheckedArray[uint8]](buf)[j].int64
   else: raise newException(PluginError, "expected an integer column, got Arrow format '" & fmt & "'")
 
-proc strAt(fmt: string, a: ptr ArrowArray, i: int): StrView =
+proc strAt*(fmt: string, a: ptr ArrowArray, i: int): StrView =
   let j = a.offset.int + i
   case fmt
   of "u":
@@ -167,7 +167,15 @@ proc strAt(fmt: string, a: ptr ArrowArray, i: int): StrView =
       StrView(p: cast[ptr UncheckedArray[char]](cast[uint](buf) + v[3].uint32.uint), n: n)
   else: raise newException(PluginError, "expected a string column, got Arrow format '" & fmt & "'")
 
+template hasReader*(T: typedesc): bool =
+  ## True when a plugin module gives `T` its own reader,
+  ## `proc readValue(T: typedesc[X], fmt: string, a: ptr ArrowArray, i: int): X`,
+  ## to make one Nim type out of several Polars dtypes (any number, any duration).
+  mixin readValue
+  compiles(readValue(T, "", (ptr ArrowArray)(nil), 0))
+
 proc readCol*[T](e: ptr SeriesExport): Col[T] =
+  mixin readValue
   type S = storageOf(T)
   result.name = $e.field.name
   let fmt = fmtOf(e)
@@ -175,7 +183,7 @@ proc readCol*[T](e: ptr SeriesExport): Col[T] =
   for k in 0 ..< e.len.int: total += e.arrays[k].length.int
   result.len = total
   result.stride = (if total == 1: 0 else: 1)
-  when T isnot StrView and T isnot bool:
+  when T isnot StrView and T isnot bool and not hasReader(T):
     if e.len == 1 and fmt == arrowFormat(T):          # zero-copy
       let a = e.arrays[0]
       result.data = cast[ptr UncheckedArray[S]](a.buffers[1])
@@ -197,7 +205,8 @@ proc readCol*[T](e: ptr SeriesExport): Col[T] =
       if anyNull and (a.nullCount == 0 or vb.isNil or bit(vb, a.offset.int + i)):
         result.ownedValid[at shr 3] = result.ownedValid[at shr 3] or uint8(1 shl (at and 7))
       if a.nullCount == 0 or vb.isNil or bit(vb, a.offset.int + i):
-        when T is StrView: result.ownedData[at] = strAt(fmt, a, i)
+        when hasReader(T): result.ownedData[at] = readValue(T, fmt, a, i)
+        elif T is StrView: result.ownedData[at] = strAt(fmt, a, i)
         elif S is SomeFloat: result.ownedData[at] = S(numericAt(fmt, a, i))
         elif S is bool: result.ownedData[at] = numericAt(fmt, a, i) != 0
         elif S is SomeInteger: result.ownedData[at] = S(intAt(fmt, a, i))
@@ -345,6 +354,36 @@ proc kwargsOf*(p: ptr uint8, n: csize_t): Kwargs =
 proc kwInt*(kw: Kwargs, key: string, default: int64): int64 =
   if key in kw and kw[key].kind == pkInt: kw[key].i else: default
 
+# ---------------------------------------------------------------- options from kwargs
+
+type Kw*[T] = T
+  ## A parameter of type `Kw[T]`, with `T` an object, is built once per call
+  ## from the keyword arguments (`optionsFrom`), not read from an input column:
+  ## each field takes the keyword argument of the same name, if given, and
+  ## keeps its default value otherwise. The proc itself sees a plain `T`.
+
+proc optionsFrom*[T: object](kw: Kwargs): T =
+  ## `T` from the keyword arguments; then `prepare(result)`, if the plugin
+  ## module defines one, checks the values and precomputes what it needs.
+  mixin prepare
+  result = T()
+  var known: seq[string]
+  for name, f in fieldPairs(result):
+    when f is bool or f is SomeNumber or f is string or f is seq[string]:
+      known.add name
+      if name in kw and kw[name].kind != pkNone: f = kw[name].to(typeof f)
+  for key in kw.keys:
+    if key notin known:
+      raise newException(PluginError, "unknown keyword argument '" & key & "' (expected one of " &
+                         known.join(", ") & ")")
+  when compiles(prepare(result)): prepare(result)
+
+proc toKwargs*[T: object](o: T): seq[(string, PickleValue)] =
+  ## The keyword arguments that give `o` back through `optionsFrom`.
+  for name, f in fieldPairs(o):
+    when f is bool or f is SomeNumber or f is string or f is seq[string]:
+      result.add (name, toPickle(f))
+
 # ---------------------------------------------------------------- Nanuq bindings
 
 proc buildPlugin*(source, name: string): string {.compileTime.} =
@@ -435,6 +474,12 @@ macro polarsExpr*(fn: untyped): untyped =
         inc nCols
       elif t.eqIdent("Kwargs"):
         call.add kw
+      elif t.kind == nnkBracketExpr and t[0].eqIdent("Kw"):
+        let c = genSym(nskLet, "opts")
+        let ot = t[1]
+        setup.add quote do:
+          let `c` = optionsFrom[`ot`](`kw`)
+        call.add c
       elif t.eqIdent("Size"):
         sizeSym = genSym(nskLet, "size")
         let s = sizeSym
@@ -467,10 +512,15 @@ macro polarsExpr*(fn: untyped): untyped =
   var twinParams = @[ident"Expr"]
   var twinArgs = newNimNode(nnkBracket)
   var hasRng, hasKw, hasSize = false
+  var optParts: seq[NimNode]
   for p in fn.params[1 .. ^1]:
     let t = (if p[^2].kind == nnkVarTy: p[^2][0] else: p[^2])
     for id in p[0 ..< ^2]:
-      if t.eqIdent("RowRng"):
+      if t.kind == nnkBracketExpr and t[0].eqIdent("Kw"):
+        twinParams.add newIdentDefs(ident($id), t[1])
+        let v = ident($id)
+        optParts.add quote do: toKwargs(`v`)
+      elif t.eqIdent("RowRng"):
         hasRng = true
         twinArgs.add quote do: intRange(0, len(), dtype = UInt64)
       elif t.eqIdent("Kwargs"): hasKw = true
@@ -484,9 +534,12 @@ macro polarsExpr*(fn: untyped): untyped =
   var kwPairs = newNimNode(nnkBracket)
   if hasSize: kwPairs.add quote do: ("size", toPickle(size))
   if hasRng: kwPairs.add quote do: ("seed", toPickle(seed))
+  var kwAll = (if kwPairs.len > 0: prefix(kwPairs, "@") else: newEmptyNode())
+  for part in optParts:
+    kwAll = (if kwAll.kind == nnkEmpty: part else: infix(kwAll, "&", part))
   let kwExpr =
     if hasKw: quote do: writePickle(kwargs)
-    elif kwPairs.len > 0: quote do: writePickle(`kwPairs`)
+    elif kwAll.kind != nnkEmpty: quote do: writePickle(`kwAll`)
     else: quote do: newSeq[byte]()
   let twinName = (if fn[0].kind == nnkPostfix: postfix(ident(name), "*") else: ident(name))
   let det = newLit(not hasRng)
