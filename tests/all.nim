@@ -2,4 +2,4 @@
 ##   nim r -d:nanuqLib=prebuilt --path:../nanuq/src --path:src tests/all.nim
 
 {.warning[UnusedImport]: off.}
-import test_nanuq_isoweek, test_nanuq_stats
+import test_nanuq_isoweek, test_nanuq_stats, test_nanuq_humanize

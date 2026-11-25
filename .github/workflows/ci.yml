@@ -1,11 +1,11 @@
 name: CI
 
 # Two jobs side by side:
-# - render: renders the explainers (docs/nim_plugins.nim, docs/distributions.nim) in one
+# - render: renders the explainers (docs/nim_plugins.nim, docs/distributions.nim, docs/humanize.nim) in one
 #   program (docs/all.nim) and, on main, publishes them as the GitHub Pages site.
 #   Benchmarks are not run here: the pages read the results recorded in
 #   benchmarks/results/ (rerun them by hand, see benchmarks/).
-# - test: the checks against Python's isocalendar and scipy.stats (tests/check_*.py) and
+# - test: the checks against Python's isocalendar, scipy.stats and humanize (tests/check_*.py) and
 #   the Nim tests from Nanuq (tests/all.nim).
 # A weekly run on main keeps main's caches alive (GitHub drops a cache unused for 7 days,
 # and a pull request can only read main's caches, not another branch's) and catches
@@ -74,13 +74,14 @@ jobs:
       - run: |
           uv build --wheel
           uv venv .venv
-          uv pip install --python .venv/bin/python dist/*.whl
+          uv pip install --python .venv/bin/python dist/*.whl humanize
       - name: Render the explainers
         run: NANUQ_MORE_PYTHON=$PWD/.venv/bin/python nim r $NIM_FLAGS --nimcache:$PWD/.nimcache/all docs/all.nim
       - run: |
           mkdir -p _site
           cp docs/nim_plugins.html _site/index.html
           cp docs/distributions.html _site/distributions.html
+          cp docs/humanize.html _site/humanize.html
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
@@ -116,11 +117,13 @@ jobs:
       - run: |
           uv build --wheel
           uv venv .venv
-          uv pip install --python .venv/bin/python dist/*.whl scipy numpy
+          uv pip install --python .venv/bin/python dist/*.whl scipy numpy humanize
       - name: Check against isocalendar
         run: .venv/bin/python -I tests/check_iso.py
       - name: Check against scipy.stats
         run: .venv/bin/python -I tests/check_stats.py
+      - name: Check against humanize
+        run: .venv/bin/python -I tests/check_humanize.py
       - name: Nim tests from Nanuq
         run: nim r $NIM_FLAGS --nimcache:$PWD/.nimcache/tests tests/all.nim
 

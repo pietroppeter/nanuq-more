@@ -1,0 +1,55 @@
+{
+ "rows": 1000000,
+ "polars": "2.2.0",
+ "humanize": "4.17.0",
+ "results": [
+  {
+   "case": "naturalsize(bytes)",
+   "nim": 0.19429772100011178,
+   "python": 1.1850762299991402,
+   "same": true
+  },
+  {
+   "case": "intword(bytes)",
+   "nim": 0.2465741760001947,
+   "python": 1.3181549500018264,
+   "same": true
+  },
+  {
+   "case": "intcomma(x)",
+   "nim": 0.2324657220001427,
+   "python": 1.371631530000741,
+   "same": true
+  },
+  {
+   "case": "ordinal(bytes)",
+   "nim": 0.09671315900004629,
+   "python": 0.6891248499982794,
+   "same": true
+  },
+  {
+   "case": "metric(x, unit='V')",
+   "nim": 0.28702296400001615,
+   "python": 0.9701891200006685,
+   "same": true
+  },
+  {
+   "case": "fractional(x)",
+   "nim": 0.30304875800015907,
+   "python": 2.7122402899999543,
+   "same": true
+  },
+  {
+   "case": "naturaldelta(duration)",
+   "nim": 0.10667331800004831,
+   "python": 2.7064057200004754,
+   "same": true
+  },
+  {
+   "case": "precisedelta(duration)",
+   "nim": 0.7472246049999285,
+   "python": 13.330102429999897,
+   "same": true
+  }
+ ]
+}

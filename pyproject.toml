@@ -1,7 +1,7 @@
 [project]
 name = "nanuq-more"
 version = "0.0.1"
-description = "Polars expression plugins written in Nim: ISO weeks and vectorized distributions"
+description = "Polars expression plugins written in Nim: ISO weeks, vectorized distributions and humanize"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -18,4 +18,4 @@ packages = ["src/nanuq_more"]
 extensions = ["src/nanuq_more/plugins.nim"]   # the plugin library, next to the Python files
 
 [dependency-groups]
-dev = ["pytest", "scipy", "numpy", "polars-stats"]
+dev = ["pytest", "scipy", "numpy", "polars-stats", "humanize"]

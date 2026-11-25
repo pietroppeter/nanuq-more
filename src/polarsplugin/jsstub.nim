@@ -13,6 +13,7 @@ type
   Size* = distinct int
   Kwargs* = Table[string, string]
   PluginError* = object of CatchableError
+  Kw*[T] = T
 
 proc `==`*(a, b: Date32): bool {.borrow.}
 proc `<`*(a, b: Date32): bool {.borrow.}

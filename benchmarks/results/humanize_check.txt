@@ -1,0 +1,113 @@
+-- Int64
+naturalsize()                                                  5351 values, 0 mismatches
+naturalsize(binary=True)                                       5351 values, 0 mismatches
+naturalsize(gnu=True)                                          5351 values, 0 mismatches
+naturalsize(format='%.3f')                                     5351 values, 0 mismatches
+naturalsize(binary=True, format='%d')                          5351 values, 0 mismatches
+ordinal()                                                      5351 values, 0 mismatches
+intcomma()                                                     5351 values, 0 mismatches
+intcomma(ndigits=2)                                            5351 values, 0 mismatches
+intcomma(ndigits=0)                                            5351 values, 0 mismatches
+intword()                                                      5351 values, 0 mismatches
+intword(format='%0.3f')                                        5351 values, 0 mismatches
+apnumber()                                                     5351 values, 0 mismatches
+fractional()                                                   5351 values, 0 mismatches
+scientific()                                                   5351 values, 0 mismatches
+scientific(precision=0)                                        5351 values, 0 mismatches
+scientific(precision=5)                                        5351 values, 0 mismatches
+metric()                                                       5351 values, 0 mismatches
+metric(unit='V', precision=2)                                  5351 values, 0 mismatches
+metric(unit='°', precision=4)                                  5351 values, 0 mismatches
+-- Float64
+naturalsize()                                                 10043 values, 0 mismatches
+naturalsize(binary=True)                                      10043 values, 0 mismatches
+naturalsize(gnu=True)                                         10043 values, 0 mismatches
+naturalsize(format='%.3f')                                    10043 values, 0 mismatches
+naturalsize(binary=True, format='%d')                         10043 values, 0 mismatches
+ordinal()                                                     10043 values, 0 mismatches
+intcomma()                                                    10043 values, 0 mismatches
+intcomma(ndigits=2)                                           10043 values, 0 mismatches
+intcomma(ndigits=0)                                           10043 values, 0 mismatches
+intword()                                                     10043 values, 0 mismatches
+intword(format='%0.3f')                                       10043 values, 0 mismatches
+apnumber()                                                    10043 values, 0 mismatches
+fractional()                                                  10043 values, 0 mismatches
+scientific()                                                  10043 values, 0 mismatches
+scientific(precision=0)                                       10043 values, 0 mismatches
+scientific(precision=5)                                       10043 values, 0 mismatches
+metric()                                                      10043 values, 0 mismatches
+metric(unit='V', precision=2)                                 10043 values, 0 mismatches
+metric(unit='°', precision=4)                                 10043 values, 0 mismatches
+-- Int64
+naturaldelta()                                                 4033 values, 0 mismatches
+naturaldelta(months=False)                                     4033 values, 0 mismatches
+naturaldelta(minimum_unit='milliseconds')                      4033 values, 0 mismatches
+naturaldelta(minimum_unit='microseconds')                      4033 values, 0 mismatches
+precisedelta()                                                 4033 values, 0 mismatches
+precisedelta(minimum_unit='microseconds')                      4033 values, 0 mismatches
+precisedelta(minimum_unit='milliseconds')                      4033 values, 0 mismatches
+precisedelta(minimum_unit='minutes')                           4033 values, 0 mismatches
+precisedelta(minimum_unit='hours', format='%0.1f')             4033 values, 0 mismatches
+precisedelta(minimum_unit='days')                              4033 values, 0 mismatches
+precisedelta(minimum_unit='years')                             4033 values, 0 mismatches
+precisedelta(suppress=['days'])                                4033 values, 0 mismatches
+precisedelta(suppress=['months', 'years'])                     4033 values, 0 mismatches
+precisedelta(format='%d')                                      4033 values, 0 mismatches
+precisedelta(suppress=['seconds', 'milliseconds', 'microseconds'])   4033 values, 0 mismatches
+precisedelta(minimum_unit='months')                            4033 values, 0 mismatches
+-- Float64
+naturaldelta()                                                 4017 values, 0 mismatches
+naturaldelta(months=False)                                     4017 values, 0 mismatches
+naturaldelta(minimum_unit='milliseconds')                      4017 values, 0 mismatches
+naturaldelta(minimum_unit='microseconds')                      4017 values, 0 mismatches
+precisedelta()                                                 4017 values, 0 mismatches
+precisedelta(minimum_unit='microseconds')                      4017 values, 0 mismatches
+precisedelta(minimum_unit='milliseconds')                      4017 values, 0 mismatches
+precisedelta(minimum_unit='minutes')                           4017 values, 0 mismatches
+precisedelta(minimum_unit='hours', format='%0.1f')             4017 values, 0 mismatches
+precisedelta(minimum_unit='days')                              4017 values, 0 mismatches
+precisedelta(minimum_unit='years')                             4017 values, 0 mismatches
+precisedelta(suppress=['days'])                                4017 values, 0 mismatches
+precisedelta(suppress=['months', 'years'])                     4017 values, 0 mismatches
+precisedelta(format='%d')                                      4017 values, 0 mismatches
+precisedelta(suppress=['seconds', 'milliseconds', 'microseconds'])   4017 values, 0 mismatches
+precisedelta(minimum_unit='months')                            4017 values, 0 mismatches
+-- Duration(time_unit='us')
+naturaldelta()                                                 5005 values, 0 mismatches
+naturaldelta(months=False)                                     5005 values, 0 mismatches
+naturaldelta(minimum_unit='milliseconds')                      5005 values, 0 mismatches
+naturaldelta(minimum_unit='microseconds')                      5005 values, 0 mismatches
+precisedelta()                                                 5005 values, 0 mismatches
+precisedelta(minimum_unit='microseconds')                      5005 values, 0 mismatches
+precisedelta(minimum_unit='milliseconds')                      5005 values, 0 mismatches
+precisedelta(minimum_unit='minutes')                           5005 values, 0 mismatches
+precisedelta(minimum_unit='hours', format='%0.1f')             5005 values, 0 mismatches
+precisedelta(minimum_unit='days')                              5005 values, 0 mismatches
+precisedelta(minimum_unit='years')                             5005 values, 0 mismatches
+precisedelta(suppress=['days'])                                5005 values, 0 mismatches
+precisedelta(suppress=['months', 'years'])                     5005 values, 0 mismatches
+precisedelta(format='%d')                                      5005 values, 0 mismatches
+precisedelta(suppress=['seconds', 'milliseconds', 'microseconds'])   5005 values, 0 mismatches
+precisedelta(minimum_unit='months')                            5005 values, 0 mismatches
+naturaltime(when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4033 values, 0 mismatches
+naturaltime(future=True, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4033 values, 0 mismatches
+naturaltime(months=False, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4033 values, 0 mismatches
+naturaltime(minimum_unit='milliseconds', when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4033 values, 0 mismatches
+naturaltime(when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4017 values, 0 mismatches
+naturaltime(future=True, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4017 values, 0 mismatches
+naturaltime(months=False, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4017 values, 0 mismatches
+naturaltime(minimum_unit='milliseconds', when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   4017 values, 0 mismatches
+naturaltime(when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5005 values, 0 mismatches
+naturaltime(future=True, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5005 values, 0 mismatches
+naturaltime(months=False, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5005 values, 0 mismatches
+naturaltime(minimum_unit='milliseconds', when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5005 values, 0 mismatches
+naturaltime(when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5001 values, 0 mismatches
+naturaltime(months=False, when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5001 values, 0 mismatches
+naturaltime(minimum_unit='microseconds', when=datetime.datetime(2026, 11, 25, 15, 30, 12, 345678))   5001 values, 0 mismatches
+naturalday(format='%b %d')                                     1604 values, 0 mismatches
+naturalday(format='%a %d %B %Y')                               1604 values, 0 mismatches
+naturalday(format='%Y-%m-%d (%j, %A, %u %w %y)')               1604 values, 0 mismatches
+naturalday(format='%e %h %F')                                  1604 values, 0 mismatches
+naturaldate()                                                  1604 values, 0 mismatches
+
+576609 values checked, 0 mismatches
